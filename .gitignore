@@ -1,6 +1,6 @@
 # Dependencies
 node_modules/
-package-lock.json
+# package-lock.json - Keep it in repo for reproducible builds with npm ci
 yarn.lock
 pnpm-lock.yaml
 
