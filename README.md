@@ -70,11 +70,18 @@ https://github.com/user-attachments/assets/4bd16920-c8b3-490b-a470-e06369d0e0aa
 git clone <repository-url>
 cd CryptoBotContest
 
+# Создать файл окружения
+cp .env.example .env
+
+# При необходимости — отредактировать .env
+# (порты, креды, ключи и т.д.)
+
 # Установить зависимости
 npm install
 
 # Запустить всё (MongoDB, Redis, Backend, Frontend)
 docker-compose up --build
+
 ```
 
 **Готово!** 🎉
