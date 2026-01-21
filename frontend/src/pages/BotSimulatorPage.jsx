@@ -15,6 +15,8 @@ const BotSimulatorPage = () => {
     setStatus({ type: 'loading', message: 'Creating bots and placing bids...' });
 
     try {
+      const botHeaders = { 'x-bot-simulator': '1' };
+
       // Get all auctions
       const auctions = await apiRequest('/auctions');
       const runningAuctions = auctions.filter(a => a.status === 'RUNNING');
@@ -25,53 +27,93 @@ const BotSimulatorPage = () => {
         return;
       }
 
-      // Create bots
-      const botUsers = [];
-      for (let i = 0; i < parseInt(numBots); i++) {
-        const username = `bot_${Date.now()}_${i}`;
-        const user = await apiRequest('/users', {
-          method: 'POST',
-          data: {
-            username,
-            initialBalance: 100000,
-          },
-        });
-        botUsers.push(user);
-      }
-
-      setStatus({ type: 'success', message: `Created ${numBots} bots. Placing bids...` });
-
-      // Place bids randomly
+      // Concurrency pool to speed up massive bot creation/placing
+      const CONCURRENCY = 200; // tune as needed (e.g., 100 if backend allows)
+      let botsCreated = 0;
       let bidsPlaced = 0;
-      for (const bot of botUsers) {
-        for (let i = 0; i < parseInt(bidsPerBot); i++) {
+      let firstError = null;
+      const lastBidByBotAuction = new Map(); // key: "botId\tauctionId" -> amount
+
+      const tasks = Array.from({ length: parseInt(numBots) }, (_, i) => async () => {
+        const username = `bot_${Date.now()}_${i}`;
+        let bot;
+        try {
+          bot = await apiRequest('/users', {
+            method: 'POST',
+            headers: botHeaders,
+            data: {
+              username,
+              initialBalance: 100000,
+            },
+          });
+          botsCreated++;
+        } catch (err) {
+          const msg = err?.message || String(err);
+          if (!firstError) firstError = msg;
+          console.error(`Error creating bot user ${username}:`, err);
+          return; // Skip bidding for this bot
+        }
+
+        // Immediately place bids for this bot
+        for (let j = 0; j < parseInt(bidsPerBot); j++) {
           const auction = runningAuctions[Math.floor(Math.random() * runningAuctions.length)];
-          const bidAmount = parseFloat(minBid) + Math.random() * (parseFloat(maxBid) - parseFloat(minBid));
+          const key = `${String(bot.id)}\t${String(auction.id)}`;
+          const lastAmt = lastBidByBotAuction.get(key);
+
+          const bidAmount = lastAmt != null
+            ? Math.floor(lastAmt) + 1
+            : (() => {
+                const lo = Math.max(auction.minBid ?? 100, parseFloat(minBid));
+                const hi = Math.max(lo, parseFloat(maxBid));
+                return Math.max(lo, Math.round(lo + Math.random() * (hi - lo)));
+              })();
 
           try {
-            // Use /bids/bot endpoint for bot simulation (has higher rate limits)
-            await apiRequest(`/auctions/${auction.id}/bids/bot`, {
+            const res = await apiRequest(`/auctions/${String(auction.id)}/bids/bot`, {
               method: 'POST',
-              data: {
-                userId: bot.id,
-                amount: bidAmount,
-              },
+              headers: botHeaders,
+              data: { userId: String(bot.id), amount: Math.floor(bidAmount) },
             });
             bidsPlaced++;
-          } catch (error) {
-            console.error(`Error placing bid for bot ${bot.username}:`, error);
+            lastBidByBotAuction.set(key, res.amount);
+          } catch (err) {
+            const msg = err?.message || String(err);
+            if (!firstError) firstError = msg;
+            console.error(`Error placing bid for bot ${bot.username}:`, err);
           }
-
-          // Small delay between bids
-          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-      }
-
-      setStatus({
-        type: 'success',
-        message: `Bot simulation complete! Created ${numBots} bots and placed ${bidsPlaced} bids.`,
       });
-      showToast(`Created ${numBots} bots and placed ${bidsPlaced} bids!`, 'success');
+
+      // Run tasks with concurrency limit
+      const runPool = async (fns, limit) => {
+        return new Promise((resolve) => {
+          let idx = 0;
+          let active = 0;
+          const next = () => {
+            if (idx === fns.length && active === 0) return resolve(null);
+            while (active < limit && idx < fns.length) {
+              const fn = fns[idx++];
+              active++;
+              fn()
+                .catch(() => {})
+                .finally(() => {
+                  active--;
+                  next();
+                });
+            }
+          };
+          next();
+        });
+      };
+
+      await runPool(tasks, CONCURRENCY);
+
+      let message = `Bot simulation complete! Created ${botsCreated} bots and placed ${bidsPlaced} bids.`;
+      if (bidsPlaced === 0 && firstError) {
+        message += ` First error: ${firstError}`;
+      }
+      setStatus({ type: 'success', message });
+      showToast(`Created ${botsCreated} bots and placed ${bidsPlaced} bids!`, bidsPlaced > 0 ? 'success' : 'error');
       
       // Trigger refresh
       window.dispatchEvent(new CustomEvent('refresh-auctions'));

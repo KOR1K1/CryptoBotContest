@@ -13,8 +13,8 @@ export default () => ({
     // Production recommendation: maxPoolSize 50-100 for single server, minPoolSize 5-10
     // For high load (100k+ bids/round): maxPoolSize 75-100, minPoolSize 10
     // For medium load (10k-100k bids/round): maxPoolSize 50-75, minPoolSize 5
-    maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE || '50', 10), // Default: 50 (for development), Production: 50-100
-    minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE || '5', 10), // Default: 5 (for development), Production: 5-10
+    maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE || '150', 10), // Default: 150 (optimized for high load), Production: 100-200
+    minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE || '10', 10), // Default: 10 (optimized for high load), Production: 10-20
     maxIdleTimeMS: parseInt(process.env.MONGO_MAX_IDLE_TIME_MS || '30000', 10), // Default: 30 seconds (30000ms)
     // Close idle connections after 30 seconds of inactivity
     // This prevents connection leaks and allows MongoDB to free up resources
@@ -27,7 +27,7 @@ export default () => ({
   },
   cache: {
     ttl: {
-      dashboard: parseInt(process.env.CACHE_TTL_DASHBOARD || '2000', 10), // 2 seconds for dashboard
+      dashboard: parseInt(process.env.CACHE_TTL_DASHBOARD || '1000', 10), // 1 second (shorter when RUNNING+no bids to pick up bot load faster)
       auctionDetails: parseInt(process.env.CACHE_TTL_AUCTION || '5000', 10), // 5 seconds for auction details
       topBids: parseInt(process.env.CACHE_TTL_TOP_BIDS || '1000', 10), // 1 second for top bids
       userPosition: parseInt(process.env.CACHE_TTL_USER_POSITION || '2000', 10), // 2 seconds for user position

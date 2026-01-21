@@ -394,7 +394,7 @@ export class AuctionsController {
   ) {
     // Generate cache key (include userId to differentiate cache for different users)
     const cacheKey = `dashboard:${id}:${userId || 'all'}`;
-    const cacheTtl = this.configService.get<number>('cache.ttl.dashboard', 2000); // Default: 2 seconds
+    const defaultCacheTtl = this.configService.get<number>('cache.ttl.dashboard', 1000); // Base TTL (used for non-running auctions)
 
     // Try to get from cache first
     const cached = await this.cacheManager.get<any>(cacheKey);
@@ -504,6 +504,19 @@ export class AuctionsController {
       topBids: topBidsWithUsers,
       userPosition,
     };
+
+    // Shorter TTL when RUNNING and no bids yet — bids may be arriving (e.g. bot load test)
+    const isRunning = dashboardData.auction?.status === 'RUNNING';
+    const isRunningNoBids = isRunning && (!topBidsWithUsers || topBidsWithUsers.length === 0);
+
+    // More reactive cache for RUNNING auctions: shorter TTL
+    let cacheTtl = defaultCacheTtl;
+    if (isRunning) {
+      cacheTtl = 300; // 0.3s for running auctions
+      if (isRunningNoBids) {
+        cacheTtl = 200; // even shorter when no bids yet
+      }
+    }
 
     // Save to cache (TTL in milliseconds)
     await this.cacheManager.set(cacheKey, dashboardData, cacheTtl);

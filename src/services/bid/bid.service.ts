@@ -435,11 +435,11 @@ export class BidService {
       .limit(limit)
       .exec();
 
-    // Populate user data
+    // Populate user data (attach username for convenience)
     return Promise.all(
       topBids.map(async (bid) => {
         const user = await userModel.findById(bid.userId).exec();
-        // Add username to bid document for convenience (though it's not in schema)
+        (bid as any).username = user?.username || 'Unknown';
         return bid;
       }),
     );

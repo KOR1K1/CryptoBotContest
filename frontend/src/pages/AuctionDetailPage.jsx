@@ -64,7 +64,7 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
     // When tab is visible: resume normal polling
     let refreshInterval = null;
     
-    const ACTIVE_INTERVAL = 2000; // 2 seconds when tab is active
+    const ACTIVE_INTERVAL = 1000; // 1 second when tab is active (more reactive UI)
     const INACTIVE_INTERVAL = 30000; // 30 seconds when tab is hidden (or disable completely)
     
     const startPolling = (interval) => {
@@ -125,7 +125,39 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
         loadDashboard();
       }
     };
+
+    const handleTopUpdate = (event) => {
+      const data = event.detail;
+      if (!data || data.auctionId !== auctionId) return;
+      if (!data.topPositions || !Array.isArray(data.topPositions)) return;
+
+      // Live-update only topBids for this auction to make UI more reactive
+      // Limit to top 3 (backend sends top-10 for significance check, but UI shows only 3)
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const mappedTop = data.topPositions
+          .slice(0, 3) // Only take top 3 for display
+          .map((tp) => ({
+            position: tp.position,
+            userId: tp.userId,
+            username: tp.username || 'Unknown',
+            amount: tp.amount,
+            createdAt: tp.createdAt || prev.currentRound?.startedAt || new Date().toISOString(),
+            roundIndex:
+              typeof tp.roundIndex === 'number'
+                ? tp.roundIndex
+                : prev.currentRound?.roundIndex ?? prev.auction?.currentRound ?? 0,
+          }));
+
+        return {
+          ...prev,
+          topBids: mappedTop,
+        };
+      });
+    };
+
     window.addEventListener('refresh-auction', handleRefresh);
+    window.addEventListener('auction-top-update', handleTopUpdate);
 
     return () => {
       stopPolling();
@@ -133,8 +165,9 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
       window.removeEventListener('refresh-auction', handleRefresh);
+      window.removeEventListener('auction-top-update', handleTopUpdate);
     };
-  }, [loadDashboard]);
+  }, [loadDashboard, auctionId]);
 
   // Update timers (only when tab is visible)
   useEffect(() => {
@@ -568,24 +601,16 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
                 <CircularProgress
                   progress={
                     (() => {
-                      if (!currentRound || !auction?.roundDurationMs) {
+                      if (!currentRound?.startedAt || !currentRound?.endsAt) {
                         return 0;
                       }
-                      
-                      // Вычисляем процент пройденного времени раунда
                       const now = Date.now();
                       const startedAt = new Date(currentRound.startedAt).getTime();
                       const endsAt = new Date(currentRound.endsAt).getTime();
                       const totalDuration = endsAt - startedAt;
-                      
-                      if (totalDuration <= 0) {
-                        return 100; // Раунд уже закончился
-                      }
-                      
+                      if (totalDuration <= 0) return 100;
                       const elapsed = now - startedAt;
-                      const progressPercent = Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
-                      
-                      return progressPercent;
+                      return Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
                     })()
                   }
                   size={100}
@@ -611,7 +636,7 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
                     {formatTime(totalTimeRemaining)}
                   </div>
                 </div>
-                {currentRound && (
+                {currentRound?.startedAt && currentRound?.endsAt && (
                   <div style={{ marginTop: '8px' }}>
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
                       Round Progress
@@ -620,7 +645,14 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
                       <div
                         className="progress-bar-fill"
                         style={{
-                          width: `${Math.min(100, ((Date.now() - new Date(currentRound.startedAt).getTime()) / currentRound.roundDurationMs) * 100)}%`,
+                          width: `${(() => {
+                            const startedAt = new Date(currentRound.startedAt).getTime();
+                            const endsAt = new Date(currentRound.endsAt).getTime();
+                            const total = endsAt - startedAt;
+                            if (total <= 0) return 100;
+                            const elapsed = Date.now() - startedAt;
+                            return Math.max(0, Math.min(100, (elapsed / total) * 100));
+                          })()}%`,
                         }}
                       />
                     </div>

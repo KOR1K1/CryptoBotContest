@@ -30,7 +30,10 @@ function App() {
 
     const unsubscribeBid = on('bid_update', (data) => {
       console.log('Bid update:', data);
-      // Force refresh if on auction detail page
+      // Forward live top positions to detail page
+      window.dispatchEvent(new CustomEvent('auction-top-update', { detail: data }));
+
+      // Force refresh if on auction detail page (fallback for other fields)
       if (currentPage === 'auction-detail' && data.auctionId === currentAuctionId) {
         window.dispatchEvent(new CustomEvent('refresh-auction'));
       }

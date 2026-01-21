@@ -71,9 +71,9 @@ export class RoundSchedulerService implements OnModuleInit {
    * Get cron interval description for logging
    */
   private getCronInterval(): string {
-    // CronExpression.EVERY_30_SECONDS = '*/30 * * * * *'
-    // Runs every 30 seconds
-    return '30';
+    // CronExpression.EVERY_5_SECONDS = '*/5 * * * * *'
+    // Runs every 5 seconds
+    return '5';
   }
 
   /**
@@ -86,7 +86,7 @@ export class RoundSchedulerService implements OnModuleInit {
    * 3. Handle errors with retry logic
    * 4. Advance to next round or finalize auction
    */
-  @Cron(CronExpression.EVERY_30_SECONDS, {
+  @Cron(CronExpression.EVERY_5_SECONDS, {
     name: 'close-rounds',
   })
   async closeRoundJob() {

@@ -162,6 +162,9 @@ export class BidUpdateThrottlerService implements OnModuleInit, OnModuleDestroy 
                 position: index + 1,
                 userId: bid.userId.toString(),
                 amount: bid.amount,
+                username: (bid as any).username || 'Unknown',
+                createdAt: bid.createdAt,
+                roundIndex: bid.roundIndex,
               })),
             });
           } else {
@@ -280,6 +283,9 @@ export class BidUpdateThrottlerService implements OnModuleInit, OnModuleDestroy 
           position: index + 1,
           userId: bid.userId.toString(),
           amount: bid.amount,
+          username: (bid as any).username || 'Unknown',
+          createdAt: bid.createdAt,
+          roundIndex: bid.roundIndex,
         })),
       });
     } else {
