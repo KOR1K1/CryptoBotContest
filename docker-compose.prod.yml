@@ -11,6 +11,7 @@ services:
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongo:27017/auction_db
+      - MONGO_WIREDTIGER_CACHE_SIZE_GB=${MONGO_WIREDTIGER_CACHE_SIZE_GB:-0.25}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
@@ -32,6 +33,7 @@ services:
       - "27018:27017"  # Изменено на 27018 чтобы не конфликтовать
     environment:
       - MONGO_INITDB_DATABASE=auction_db
+      - MONGO_WIREDTIGER_CACHE_SIZE_GB=${MONGO_WIREDTIGER_CACHE_SIZE_GB:-0.25}
     volumes:
       - mongo-data:/data/db
       - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
@@ -40,7 +42,7 @@ services:
     # Adjust based on your server's RAM
     command: >
       mongod --replSet rs0
-      --wiredTigerCacheSizeGB ${MONGO_WIREDTIGER_CACHE_SIZE_GB:-16}
+      --wiredTigerCacheSizeGB ${MONGO_WIREDTIGER_CACHE_SIZE_GB:-0.25}
     networks:
       - cryptobot-network
     healthcheck:
@@ -90,7 +92,8 @@ services:
       - "6380:6379"  # Изменено на 6380
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    # For 2GB RAM reduce memory to 64mb
+    command: redis-server --appendonly yes --maxmemory 64mb --maxmemory-policy allkeys-lru
     networks:
       - cryptobot-network
     healthcheck:
@@ -100,43 +103,6 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
-
-  mongodb-exporter:
-    image: percona/mongodb_exporter:0.40
-    container_name: cryptobot-mongodb-exporter
-    ports:
-      - "9217:9216"  # Изменено на 9217
-    environment:
-      # Percona MongoDB Exporter reads MONGODB_URI from environment variable
-      # If MONGODB_URI is not set, it defaults to mongodb://localhost:27017
-      - MONGODB_URI=mongodb://mongo:27017/auction_db?replicaSet=rs0
-    # MongoDB Exporter command for Prometheus metrics
-    # Collects: diagnostic data, replica set status, db stats, top metrics, index stats, coll stats
-    # Note: MONGODB_URI is read from environment variable automatically
-    # Available collectors: diagnosticdata, replicasetstatus, dbstats, topmetrics, indexstats, collstats, profile
-    command:
-      - '--compatible-mode'
-      - '--web.listen-address=:9216'
-      - '--collector.diagnosticdata'
-      - '--collector.replicasetstatus'
-      - '--collector.dbstats'
-      - '--collector.topmetrics'
-      - '--collector.indexstats'
-      - '--collector.collstats'
-    depends_on:
-      mongo:
-        condition: service_healthy
-      mongo-setup:
-        condition: service_completed_successfully
-    networks:
-      - cryptobot-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9216/metrics || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
 
 volumes:
   mongo-data:
