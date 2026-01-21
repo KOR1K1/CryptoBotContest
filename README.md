@@ -16,7 +16,7 @@
 
 ---
 
-https://github.com/user-attachments/assets/4bd16920-c8b3-490b-a470-e06369d0e0aa
+https://github.com/user-attachments/assets/a8db1c49-6155-4a2b-978e-be7ace42bec2
 
 ## О проекте
 

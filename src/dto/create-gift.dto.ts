@@ -8,6 +8,8 @@ import {
   IsUrl,
   IsObject,
   IsInt,
+  MinLength,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -16,12 +18,13 @@ export class CreateGiftDto {
   @ApiProperty({
     description: 'Title of the gift',
     example: 'Golden Trophy',
+    minLength: 1,
     maxLength: 200,
   })
   @IsString()
   @IsNotEmpty()
-  @Min(1)
-  @Max(200)
+  @MinLength(1, { message: 'title must not be less than 1 character' })
+  @MaxLength(200, { message: 'title must not be greater than 200 characters' })
   title!: string;
 
   @ApiPropertyOptional({
@@ -31,7 +34,7 @@ export class CreateGiftDto {
   })
   @IsString()
   @IsOptional()
-  @Max(1000)
+  @MaxLength(1000, { message: 'description must not be greater than 1000 characters' })
   description?: string;
 
   @ApiPropertyOptional({
@@ -39,9 +42,9 @@ export class CreateGiftDto {
     example: 'https://example.com/images/trophy.png',
     maxLength: 500,
   })
-  @IsUrl()
+  @IsUrl({}, { message: 'imageUrl must be a valid URL' })
   @IsOptional()
-  @Max(500)
+  @MaxLength(500, { message: 'imageUrl must not be greater than 500 characters' })
   imageUrl?: string;
 
   @ApiProperty({
