@@ -13,6 +13,10 @@ services:
       - MONGODB_URI=mongodb://mongo:27017/auction_db
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Optional: Explicitly set Docker container resources (overrides auto-detection)
+      # Uncomment if you want to override auto-detected values:
+      # - DOCKER_MEMORY_LIMIT_GB=16
+      # - DOCKER_CPU_LIMIT=8
     depends_on:
       mongo:
         condition: service_healthy
@@ -24,6 +28,31 @@ services:
     networks:
       - auction-network
     restart: unless-stopped
+    # Resource Limits for Backend Container
+    # 
+    # IMPORTANT: If you set resource limits here, the backend will automatically detect them
+    # and adjust connection pool accordingly.
+    #
+    # Example for small server (2GB RAM, 2 CPU):
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1G
+    #       cpus: '2'
+    #     reservations:
+    #       memory: 512M
+    #       cpus: '1'
+    #
+    # If limits are NOT set, the backend will use host system resources (auto-detected)
+    # Uncomment and adjust based on your needs:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 4G
+    #       cpus: '4'
+    #     reservations:
+    #       memory: 2G
+    #       cpus: '2'
 
   mongo:
     image: mongo:7.0
@@ -38,11 +67,48 @@ services:
     # MongoDB Memory Tuning: Set WiredTiger cache size to 50% of available RAM
     # For 8GB RAM: 4GB cache (50%)
     # For 16GB RAM: 8GB cache (50%)
+    # For 32GB RAM: 16GB cache (50%)
+    # For 64GB RAM: 16-32GB cache (25-50%)
     # Adjust based on your server's RAM (default: 4GB for development)
     # Production: Should be ~50% of available RAM, leaving room for OS and other services
     command: >
       mongod --replSet rs0
       --wiredTigerCacheSizeGB ${MONGO_WIREDTIGER_CACHE_SIZE_GB:-4}
+    # Resource Limits for Docker Containers
+    # 
+    # IMPORTANT: If you set resource limits here, the backend will automatically detect them
+    # and adjust MongoDB cache and connection pool accordingly.
+    #
+    # Example for small server (2GB RAM, 2 CPU):
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 2G
+    #       cpus: '2'
+    #     reservations:
+    #       memory: 1G
+    #       cpus: '1'
+    #
+    # Example for large server (64GB RAM, 12 CPU):
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 32G
+    #       cpus: '8'
+    #     reservations:
+    #       memory: 16G
+    #       cpus: '4'
+    #
+    # If limits are NOT set, the backend will use host system resources (auto-detected)
+    # Uncomment and adjust based on your needs:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 32G
+    #       cpus: '8'
+    #     reservations:
+    #       memory: 16G
+    #       cpus: '4'
     networks:
       - auction-network
     healthcheck:

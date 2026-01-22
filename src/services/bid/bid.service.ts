@@ -12,6 +12,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Bid, BidDocument } from '../../models/bid.schema';
 import { Auction, AuctionDocument } from '../../models/auction.schema';
+import { User, UserDocument } from '../../models/user.schema';
 import { BidStatus } from '../../common/enums/bid-status.enum';
 import { AuctionStatus } from '../../common/enums/auction-status.enum';
 import { BalanceService } from '../balance/balance.service';
@@ -47,6 +48,7 @@ export class BidService {
     @InjectConnection() private connection: Connection,
     @InjectModel(Bid.name) private bidModel: Model<BidDocument>,
     @InjectModel(Auction.name) private auctionModel: Model<AuctionDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private balanceService: BalanceService,
     private redisLockService: RedisLockService,
   ) {}
@@ -129,6 +131,9 @@ export class BidService {
    * - All operations are atomic via MongoDB transactions
    * - Uses BalanceService for fund locking
    *
+   * OPTIMIZED: All validations are done INSIDE transaction to avoid race conditions
+   * and reduce number of database queries (critical for performance).
+   *
    * @param dto PlaceBidDto with userId, auctionId, amount, currentRound
    * @returns Created or updated bid document
    * @throws BadRequestException if validation fails
@@ -137,87 +142,53 @@ export class BidService {
   async placeBid(dto: PlaceBidDto): Promise<BidDocument> {
     const { userId, auctionId, amount, currentRound } = dto;
 
-    // Check for existing bid first to validate correctly
-    const existingBid = await this.preventDuplicateActiveBid(userId, auctionId);
-
-    if (existingBid) {
-      // Validate: new amount must be greater than existing
-      if (amount <= existingBid.amount) {
-        throw new BadRequestException(
-          `New bid amount ${amount} must be greater than existing bid ${existingBid.amount}. Bids can only be increased.`,
-        );
-      }
-    }
-
-    // Validate auction status and minimum bid (check full amount)
-    // Note: validateBid checks full amount for minBid requirement
-    // Balance check is done separately below to handle existing bids correctly
-    const auction = await this.validateBid(auctionId, userId, amount);
-
-    // For balance validation: check delta if increasing, full amount if new
-    const amountToCheck = existingBid
-      ? amount - existingBid.amount // Only check additional funds needed
-      : amount; // Check full amount for new bid
-
-    // Validate balance: check delta if increasing existing bid, full amount if new bid
-    const hasBalance = await this.balanceService.validateBalance(
-      userId,
-      amountToCheck,
-    );
-    if (!hasBalance) {
-      throw new BadRequestException(
-        existingBid
-          ? `Insufficient balance. Need additional ${amountToCheck} to increase bid from ${existingBid.amount} to ${amount}`
-          : `Insufficient balance for bid of ${amount}`,
-      );
-    }
-
     // Retry configuration for transaction conflicts
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 100; // Initial delay, increases exponentially
+    // Optimized for high concurrency: more retries with exponential backoff
+    // Top projects handle 100k+ concurrent bids with 5-10 retries
+    const MAX_RETRIES = 5; // Increased from 3 to 5 for better conflict handling
+    const RETRY_DELAY_MS = 50; // Reduced initial delay for faster retries (was 100ms)
 
     // Use Redis lock for user-level concurrency control (optional, falls back to MongoDB transactions)
+    // OPTIMIZED: Only user-level lock (not auction-level) for better performance
     const userLockKey = `user:${userId}`;
-    const auctionLockKey = `auction:${auctionId}`;
 
     // Try to acquire Redis locks (optional - if Redis unavailable, continue with MongoDB transactions only)
     const useRedisLocks = this.redisLockService.isLockServiceAvailable();
 
     if (useRedisLocks) {
-      // Use Redis lock to prevent concurrent bid operations for same user/auction
+      // Use Redis lock to prevent concurrent bid operations for same user
+      // OPTIMIZED: Only user lock, not auction lock (MongoDB transactions handle auction-level concurrency)
       return this.redisLockService.withLock(
         userLockKey,
         async () => {
-          return this.redisLockService.withLock(
-            auctionLockKey,
-            async () => {
-              return this.executePlaceBidTransaction(dto, existingBid, MAX_RETRIES, RETRY_DELAY_MS);
-            },
-            10, // 10 seconds TTL for auction lock
-            { maxRetries: 2, retryDelayMs: 50 },
-          );
+          return this.executePlaceBidTransaction(dto, null, MAX_RETRIES, RETRY_DELAY_MS);
         },
-        10, // 10 seconds TTL for user lock
-        { maxRetries: 2, retryDelayMs: 50 },
+        5, // Reduced TTL to 5 seconds for faster release
+        { maxRetries: 1, retryDelayMs: 10 }, // Faster retry
       );
     } else {
       // Fallback: Use MongoDB transactions only (works fine for most scenarios)
-      return this.executePlaceBidTransaction(dto, existingBid, MAX_RETRIES, RETRY_DELAY_MS);
+      return this.executePlaceBidTransaction(dto, null, MAX_RETRIES, RETRY_DELAY_MS);
     }
   }
 
   /**
    * Execute bid placement transaction (extracted for reuse with/without Redis locks)
    * 
+   * OPTIMIZED: All validations are done INSIDE transaction to:
+   * 1. Avoid race conditions
+   * 2. Reduce number of database queries (critical for performance)
+   * 3. Ensure atomicity of all checks and operations
+   * 
    * @param dto PlaceBidDto
-   * @param existingBid Existing bid if any
+   * @param existingBid DEPRECATED: Always pass null, will be checked inside transaction
    * @param maxRetries Maximum retry attempts
    * @param retryDelayMs Initial retry delay
    * @returns Created or updated bid document
    */
   private async executePlaceBidTransaction(
     dto: PlaceBidDto,
-    existingBid: BidDocument | null,
+    existingBid: BidDocument | null, // DEPRECATED: kept for compatibility, always null
     maxRetries: number,
     retryDelayMs: number,
   ): Promise<BidDocument> {
@@ -230,106 +201,165 @@ export class BidService {
       try {
         let result: BidDocument;
 
-        await session.withTransaction(async () => {
-        // Re-check existing bid within transaction (for consistency)
-        const existingBidInTx = await this.bidModel
-          .findOne({
-            userId,
-            auctionId,
-            status: BidStatus.ACTIVE,
-          })
-          .session(session)
-          .exec();
+        // CRITICAL: Set transaction timeout to prevent long-running transactions
+        // Default MongoDB transaction timeout is 60s, but we set it to 5s for faster failure and less blocking
+        await session.withTransaction(
+          async () => {
+            // ✅ OPTIMIZED: All validations INSIDE transaction (critical for performance)
+          
+          // 1. Validate auction (inside transaction)
+          const auction = await this.auctionModel
+            .findById(auctionId)
+            .session(session)
+            .exec();
 
-        if (existingBidInTx) {
-          // Increase existing bid
-          // Double-check amount is greater (defensive programming)
-          if (amount <= existingBidInTx.amount) {
+          if (!auction) {
+            throw new NotFoundException(`Auction with ID ${auctionId} not found`);
+          }
+
+          if (auction.status !== AuctionStatus.RUNNING) {
+            throw new BadRequestException(
+              `Auction is not running. Current status: ${auction.status}`,
+            );
+          }
+
+          if (amount < auction.minBid) {
+            throw new BadRequestException(
+              `Bid amount ${amount} is below minimum bid ${auction.minBid}`,
+            );
+          }
+
+          // 2. Check existing bid (inside transaction)
+          const existingBidInTx = await this.bidModel
+            .findOne({
+              userId,
+              auctionId,
+              status: BidStatus.ACTIVE,
+            })
+            .session(session)
+            .exec();
+
+          // 3. Validate balance (inside transaction)
+          const user = await this.userModel
+            .findById(userId)
+            .session(session)
+            .exec();
+
+          if (!user) {
+            throw new NotFoundException(`User with ID ${userId} not found`);
+          }
+
+          // Calculate amount to check (delta if increasing, full if new)
+          const amountToCheck = existingBidInTx
+            ? amount - existingBidInTx.amount // Only check additional funds needed
+            : amount; // Check full amount for new bid
+
+          if (user.balance < amountToCheck) {
+            throw new BadRequestException(
+              existingBidInTx
+                ? `Insufficient balance. Need additional ${amountToCheck} to increase bid from ${existingBidInTx.amount} to ${amount}`
+                : `Insufficient balance for bid of ${amount}. Available: ${user.balance}`,
+            );
+          }
+
+          // 4. Validate amount increase (if existing bid)
+          if (existingBidInTx && amount <= existingBidInTx.amount) {
             throw new BadRequestException(
               `New bid amount ${amount} must be greater than existing bid ${existingBidInTx.amount}. Bids can only be increased.`,
             );
           }
 
-          const delta = amount - existingBidInTx.amount;
+          // 5. Execute operation (inside same transaction)
+          if (existingBidInTx) {
+            // Increase existing bid
+            const delta = amount - existingBidInTx.amount;
 
-          // Lock additional funds via BalanceService
-          await this.balanceService.lockFunds(
-            userId,
-            delta,
-            existingBidInTx._id.toString(),
-            `Increase bid from ${existingBidInTx.amount} to ${amount}`,
-            session,
-          );
+            // Lock additional funds
+            await this.balanceService.lockFunds(
+              userId,
+              delta,
+              existingBidInTx._id.toString(),
+              `Increase bid from ${existingBidInTx.amount} to ${amount}`,
+              session,
+            );
 
-          // Update bid
-          const updatedBid = await this.bidModel
-            .findByIdAndUpdate(
-              existingBidInTx._id,
-              {
-                amount,
-                roundIndex: currentRound,
-                updatedAt: new Date(),
-              },
-              { new: true, session },
-            )
-            .exec();
+            // Update bid
+            const updatedBid = await this.bidModel
+              .findByIdAndUpdate(
+                existingBidInTx._id,
+                {
+                  amount,
+                  roundIndex: currentRound,
+                  updatedAt: new Date(),
+                },
+                { new: true, session },
+              )
+              .exec();
 
-          if (!updatedBid) {
-            throw new InternalServerErrorException('Failed to update bid');
+            if (!updatedBid) {
+              throw new InternalServerErrorException('Failed to update bid');
+            }
+
+            result = updatedBid;
+
+            this.logger.log(
+              `Increased bid for user ${userId} in auction ${auctionId}: ${existingBidInTx.amount} -> ${amount}`,
+            );
+          } else {
+            // Create new bid
+            // OPTIMIZED: Create bid first, then lock funds (bidId needed for reference)
+            const createdBid = await this.bidModel.create(
+              [
+                {
+                  userId,
+                  auctionId,
+                  amount,
+                  roundIndex: currentRound,
+                  status: BidStatus.ACTIVE,
+                },
+              ],
+              { session },
+            );
+
+            if (!createdBid || createdBid.length === 0) {
+              throw new InternalServerErrorException('Failed to create bid');
+            }
+
+            const newBid = createdBid[0];
+
+            // Lock funds (using bidId as reference)
+            await this.balanceService.lockFunds(
+              userId,
+              amount,
+              newBid._id.toString(),
+              `Lock funds for new bid of ${amount}`,
+              session,
+            );
+
+            // Fetch the complete bid document
+            const fetchedBid = await this.bidModel
+              .findById(newBid._id)
+              .session(session)
+              .exec();
+
+            if (!fetchedBid) {
+              throw new InternalServerErrorException('Failed to fetch created bid');
+            }
+
+            result = fetchedBid;
+
+            this.logger.log(
+              `Placed new bid for user ${userId} in auction ${auctionId}: ${amount}`,
+            );
           }
-
-          result = updatedBid;
-
-          this.logger.log(
-            `Increased bid for user ${userId} in auction ${auctionId}: ${existingBidInTx.amount} -> ${amount}`,
-          );
-        } else {
-          // Create new bid
-          // Lock funds via BalanceService
-          const createdBid = await this.bidModel.create(
-            [
-              {
-                userId,
-                auctionId,
-                amount,
-                roundIndex: currentRound,
-                status: BidStatus.ACTIVE,
-              },
-            ],
-            { session },
-          );
-
-          if (!createdBid || createdBid.length === 0) {
-            throw new InternalServerErrorException('Failed to create bid');
-          }
-
-          const newBid = createdBid[0];
-
-          // Lock funds after bid creation (to get bidId for reference)
-          await this.balanceService.lockFunds(
-            userId,
-            amount,
-            newBid._id.toString(),
-            `Lock funds for new bid of ${amount}`,
-            session,
-          );
-
-          // Fetch the complete bid document
-          const fetchedBid = await this.bidModel
-            .findById(newBid._id)
-            .session(session)
-            .exec();
-
-          if (!fetchedBid) {
-            throw new InternalServerErrorException('Failed to fetch created bid');
-          }
-
-          result = fetchedBid;
-
-          this.logger.log(
-            `Placed new bid for user ${userId} in auction ${auctionId}: ${amount}`,
-          );
-        }
+        },
+        {
+          // CRITICAL: Transaction timeout to prevent blocking
+          // maxTimeMS: 5000 = 5 seconds max transaction time
+          // This prevents long-running transactions from blocking others
+          maxTimeMS: 5000,
+          readConcern: { level: 'snapshot' },
+          writeConcern: { w: 'majority' },
         });
 
         await session.endSession();
@@ -338,13 +368,16 @@ export class BidService {
         await session.endSession();
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        // Check if error is retryable (transaction conflicts)
+        // Check if error is retryable (transaction conflicts and transient errors)
         const isRetryableError =
           error instanceof Error &&
           (error.message.includes('Write conflict') ||
             error.message.includes('TransientTransactionError') ||
             error.message.includes('UnknownTransactionCommitResult') ||
-            error.message.includes('WriteConflict'));
+            error.message.includes('WriteConflict') ||
+            error.message.includes('catalog changes') ||
+            error.message.includes('Unable to write to collection') ||
+            error.message.includes('Please retry your operation'));
 
         // Don't retry known business logic errors
         if (
@@ -375,12 +408,17 @@ export class BidService {
           );
         }
 
-        // Retry with exponential backoff
+        // Retry with exponential backoff + jitter for better distribution
+        // Formula: baseDelay * (2^attempt) + random(0-50ms) to avoid thundering herd
+        const exponentialDelay = retryDelayMs * Math.pow(2, attempt - 1);
+        const jitter = Math.random() * 50; // Random 0-50ms to spread retries
+        const totalDelay = Math.min(exponentialDelay + jitter, 2000); // Cap at 2s max delay
+        
         this.logger.warn(
-          `Retry ${attempt}/${maxRetries} for bid placement (user ${userId}, auction ${auctionId}): ${lastError.message}`,
+          `Retry ${attempt}/${maxRetries} for bid placement (user ${userId}, auction ${auctionId}): ${lastError.message}, delay: ${totalDelay.toFixed(0)}ms`,
         );
         await new Promise((resolve) =>
-          setTimeout(resolve, retryDelayMs * attempt),
+          setTimeout(resolve, totalDelay),
         );
       }
     }

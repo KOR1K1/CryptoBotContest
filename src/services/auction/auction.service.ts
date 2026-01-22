@@ -362,7 +362,7 @@ export class AuctionService {
         
         // If all gifts already awarded, no more winners in this round
         if (remainingGifts <= 0) {
-          // Close round with 0 winners, all bids carry over or get refunded later
+          // Close round with 0 winners
           const updatedRound = await this.auctionRoundModel
             .findByIdAndUpdate(
               currentRound._id,
@@ -379,6 +379,12 @@ export class AuctionService {
             throw new InternalServerErrorException('Failed to close round');
           }
 
+          // If all gifts are awarded, auction should be finalized
+          // This can happen if gifts were awarded in previous rounds
+          // Note: We don't finalize here because this method only closes rounds
+          // The scheduler will detect this and finalize the auction
+          // But we mark the auction for finalization by checking in the scheduler
+          
           result = {
             round: updatedRound,
             winners: [],

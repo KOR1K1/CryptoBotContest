@@ -55,9 +55,9 @@ export class RoundSchedulerService implements OnModuleInit {
 
   /**
    * Called when module initializes
-   * Logs scheduler startup
+   * Logs scheduler startup and recovers stuck auctions
    */
-  onModuleInit() {
+  async onModuleInit() {
     this.logger.log({
       action: 'scheduler-initialized',
       service: 'RoundSchedulerService',
@@ -65,20 +65,34 @@ export class RoundSchedulerService implements OnModuleInit {
       maxRetries: this.MAX_RETRIES,
       retryDelayMs: this.RETRY_DELAY_MS,
     }, 'RoundScheduler initialized');
+
+    // Recover stuck auctions on startup
+    // This handles cases where:
+    // 1. Auction is RUNNING but all rounds are completed
+    // 2. Last round is closed but auction is not finalized
+    // 3. Rounds are overdue and should be closed
+    try {
+      await this.recoverStuckAuctions();
+    } catch (error) {
+      this.logger.error({
+        action: 'recovery-error',
+        error: error instanceof Error ? error.message : String(error),
+      }, 'Error during auction recovery on startup');
+    }
   }
 
   /**
    * Get cron interval description for logging
    */
   private getCronInterval(): string {
-    // CronExpression.EVERY_5_SECONDS = '*/5 * * * * *'
-    // Runs every 5 seconds
-    return '5';
+    // CronExpression.EVERY_SECOND = '* * * * * *'
+    // Runs every 1 second for fast response on short auctions
+    return '1';
   }
 
   /**
    * Main cron job: checks for rounds that should be closed
-   * Runs every 30 seconds (configurable)
+   * Runs every 1 second for fast response on short auctions (30s, 1min, etc.)
    *
    * Strategy:
    * 1. Find all unclosed rounds where endsAt <= now
@@ -86,7 +100,7 @@ export class RoundSchedulerService implements OnModuleInit {
    * 3. Handle errors with retry logic
    * 4. Advance to next round or finalize auction
    */
-  @Cron(CronExpression.EVERY_5_SECONDS, {
+  @Cron(CronExpression.EVERY_SECOND, {
     name: 'close-rounds',
   })
   async closeRoundJob() {
@@ -371,18 +385,36 @@ export class RoundSchedulerService implements OnModuleInit {
         durationMs: new Date().getTime() - closeStartTime.getTime(),
       }, `Successfully closed round ${roundIndex} for auction ${auctionId} (attempt ${attempt}). Winners: ${result.winners.length}`);
 
-      // Check if this was the last round
-      // Note: currentRound is the round we just closed, so we check if it was the last
+      // Check if this was the last round OR if all gifts have been awarded
+      // CRITICAL: Use roundIndex from the round we just closed, not auction.currentRound
+      // because currentRound may have been incremented by advanceRound() already
       const auction = await this.auctionService.getAuctionById(auctionId);
-      const wasLastRound = auction.currentRound >= auction.totalRounds - 1;
+      // roundIndex is 0-based, totalRounds is count (1-based)
+      // Last round index = totalRounds - 1
+      const wasLastRound = roundIndex === auction.totalRounds - 1;
 
-      if (wasLastRound) {
+      // Check if all gifts have been awarded (may happen before last round)
+      const allRounds = await this.auctionRoundModel
+        .find({ auctionId })
+        .exec();
+      const closedRounds = allRounds.filter(r => r.closed);
+      const totalAwarded = closedRounds.reduce((sum, r) => sum + (r.winnersCount || 0), 0);
+      const allGiftsAwarded = totalAwarded >= auction.totalGifts;
+
+      if (wasLastRound || allGiftsAwarded) {
         // Finalize auction after last round
+        const reason = wasLastRound 
+          ? 'last round closed' 
+          : `all ${totalAwarded}/${auction.totalGifts} gifts awarded`;
+        
         this.logger.log({
           action: 'finalize-auction-start',
           auctionId,
           lastRoundIndex: roundIndex,
-        }, `Last round closed for auction ${auctionId}. Finalizing auction...`);
+          reason,
+          totalAwarded,
+          totalGifts: auction.totalGifts,
+        }, `Finalizing auction ${auctionId} (${reason})...`);
         
         const finalizeStartTime = new Date();
         await this.auctionService.finalizeAuction(auctionId);
@@ -530,6 +562,213 @@ export class RoundSchedulerService implements OnModuleInit {
       runningAuctions,
       nextRoundToClose: nextRound?.endsAt || null,
     };
+  }
+
+  /**
+   * Recover stuck auctions on startup
+   * Checks all RUNNING auctions and ensures they are in correct state
+   * - Closes overdue rounds
+   * - Finalizes auctions where all rounds are completed
+   * - Handles auctions stuck in FINALIZING state
+   */
+  private async recoverStuckAuctions(): Promise<void> {
+    this.logger.log({
+      action: 'recovery-start',
+    }, 'Starting auction recovery on startup...');
+
+    const now = new Date();
+    let recoveredCount = 0;
+    let finalizedCount = 0;
+
+    try {
+      // Find all RUNNING auctions
+      const runningAuctions = await this.auctionModel
+        .find({
+          status: AuctionStatus.RUNNING,
+        })
+        .exec();
+
+      this.logger.log({
+        action: 'recovery-check',
+        runningAuctions: runningAuctions.length,
+      }, `Found ${runningAuctions.length} RUNNING auction(s) to check`);
+
+      for (const auction of runningAuctions) {
+        try {
+          const auctionId = auction._id.toString();
+          
+          // Get all rounds for this auction
+          const allRounds = await this.auctionRoundModel
+            .find({ auctionId })
+            .sort({ roundIndex: 1 })
+            .exec();
+
+          // Check if all gifts have been awarded
+          const closedRounds = allRounds.filter(r => r.closed);
+          const totalAwarded = closedRounds.reduce((sum, r) => sum + (r.winnersCount || 0), 0);
+          
+          if (totalAwarded >= auction.totalGifts) {
+            // All gifts awarded - auction should be finalized
+            this.logger.warn({
+              action: 'recovery-finalize-all-gifts',
+              auctionId,
+              totalAwarded,
+              totalGifts: auction.totalGifts,
+              status: auction.status,
+            }, `Auction ${auctionId} has awarded all ${totalAwarded}/${auction.totalGifts} gifts but is still RUNNING. Finalizing...`);
+
+            try {
+              await this.auctionService.finalizeAuction(auctionId);
+              finalizedCount++;
+              this.logger.log({
+                action: 'recovery-finalize-success',
+                auctionId,
+              }, `Successfully finalized auction ${auctionId} (all gifts awarded)`);
+            } catch (error) {
+              this.logger.error({
+                action: 'recovery-finalize-error',
+                auctionId,
+                error: error instanceof Error ? error.message : String(error),
+              }, `Failed to finalize auction ${auctionId}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+            continue;
+          }
+
+          // Check if last round exists and is closed
+          const lastRoundIndex = auction.totalRounds - 1;
+          const lastRound = allRounds.find(r => r.roundIndex === lastRoundIndex);
+
+          if (lastRound && lastRound.closed) {
+            // Last round is closed but auction is still RUNNING - needs finalization
+            this.logger.warn({
+              action: 'recovery-finalize',
+              auctionId,
+              lastRoundIndex,
+              status: auction.status,
+            }, `Auction ${auctionId} has closed last round but is still RUNNING. Finalizing...`);
+
+            try {
+              await this.auctionService.finalizeAuction(auctionId);
+              finalizedCount++;
+              this.logger.log({
+                action: 'recovery-finalize-success',
+                auctionId,
+              }, `Successfully finalized stuck auction ${auctionId}`);
+            } catch (error) {
+              this.logger.error({
+                action: 'recovery-finalize-error',
+                auctionId,
+                error: error instanceof Error ? error.message : String(error),
+              }, `Failed to finalize auction ${auctionId}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+            continue;
+          }
+
+          // Check for overdue rounds that should be closed
+          const currentRound = allRounds.find(r => r.roundIndex === auction.currentRound);
+          if (currentRound && !currentRound.closed && currentRound.endsAt <= now) {
+            // Round is overdue - should be closed
+            const overdueMs = now.getTime() - currentRound.endsAt.getTime();
+            this.logger.warn({
+              action: 'recovery-overdue-round',
+              auctionId,
+              roundIndex: currentRound.roundIndex,
+              overdueByMs: overdueMs,
+            }, `Auction ${auctionId} has overdue round ${currentRound.roundIndex} (overdue by ${Math.floor(overdueMs / 1000)}s). Closing...`);
+
+            try {
+              await this.processRoundClosing(currentRound);
+              recoveredCount++;
+              this.logger.log({
+                action: 'recovery-round-success',
+                auctionId,
+                roundIndex: currentRound.roundIndex,
+              }, `Successfully closed overdue round ${currentRound.roundIndex} for auction ${auctionId}`);
+            } catch (error) {
+              this.logger.error({
+                action: 'recovery-round-error',
+                auctionId,
+                roundIndex: currentRound.roundIndex,
+                error: error instanceof Error ? error.message : String(error),
+              }, `Failed to close overdue round ${currentRound.roundIndex} for auction ${auctionId}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+        } catch (error) {
+          this.logger.error({
+            action: 'recovery-auction-error',
+            auctionId: auction._id.toString(),
+            error: error instanceof Error ? error.message : String(error),
+          }, `Error recovering auction ${auction._id}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      // Also check for auctions stuck in FINALIZING state
+      const finalizingAuctions = await this.auctionModel
+        .find({
+          status: AuctionStatus.FINALIZING,
+        })
+        .exec();
+
+      this.logger.log({
+        action: 'recovery-check-finalizing',
+        finalizingAuctions: finalizingAuctions.length,
+      }, `Found ${finalizingAuctions.length} FINALIZING auction(s) to check`);
+
+      for (const auction of finalizingAuctions) {
+        try {
+          const auctionId = auction._id.toString();
+          
+          // Check if auction should be COMPLETED
+          // If it's been in FINALIZING for more than 5 minutes, try to complete it
+          const updatedAt = auction.updatedAt || auction.createdAt;
+          const timeInFinalizing = now.getTime() - updatedAt.getTime();
+          
+          if (timeInFinalizing > 5 * 60 * 1000) { // 5 minutes
+            this.logger.warn({
+              action: 'recovery-complete-finalizing',
+              auctionId,
+              timeInFinalizingMs: timeInFinalizing,
+            }, `Auction ${auctionId} has been in FINALIZING state for ${Math.floor(timeInFinalizing / 1000)}s. Attempting to complete...`);
+
+            try {
+              await this.auctionService.finalizeAuction(auctionId);
+              finalizedCount++;
+              this.logger.log({
+                action: 'recovery-complete-success',
+                auctionId,
+              }, `Successfully completed stuck FINALIZING auction ${auctionId}`);
+            } catch (error) {
+              this.logger.error({
+                action: 'recovery-complete-error',
+                auctionId,
+                error: error instanceof Error ? error.message : String(error),
+              }, `Failed to complete FINALIZING auction ${auctionId}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+        } catch (error) {
+          this.logger.error({
+            action: 'recovery-finalizing-error',
+            auctionId: auction._id.toString(),
+            error: error instanceof Error ? error.message : String(error),
+          }, `Error recovering FINALIZING auction ${auction._id}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      this.logger.log({
+        action: 'recovery-complete',
+        runningAuctions: runningAuctions.length,
+        finalizingAuctions: finalizingAuctions.length,
+        recoveredRounds: recoveredCount,
+        finalizedAuctions: finalizedCount,
+      }, `Auction recovery completed: ${recoveredCount} rounds closed, ${finalizedCount} auctions finalized`);
+    } catch (error) {
+      this.logger.error({
+        action: 'recovery-fatal-error',
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      }, `Fatal error during auction recovery: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 
   /**

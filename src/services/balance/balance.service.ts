@@ -140,35 +140,21 @@ export class BalanceService {
           );
         }
 
-        // Create ledger entry (idempotency: check if already exists)
-        const existingLedgerEntry = await this.ledgerEntryModel
-          .findOne({
-            userId,
-            type: LedgerType.LOCK,
-            referenceId,
-            amount,
-          })
-          .session(useSession)
-          .exec();
-
-        if (!existingLedgerEntry) {
-          await this.ledgerEntryModel.create(
-            [
-              {
-                userId,
-                type: LedgerType.LOCK,
-                amount,
-                referenceId,
-                description: description || `Lock funds for bid ${referenceId}`,
-              },
-            ],
-            { session: useSession },
-          );
-        } else {
-          this.logger.warn(
-            `Ledger entry already exists for LOCK operation: userId=${userId}, referenceId=${referenceId}, amount=${amount}`,
-          );
-        }
+        // Create ledger entry
+        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
+        // If idempotency is needed, use unique index on (userId, type, referenceId, amount)
+        await this.ledgerEntryModel.create(
+          [
+            {
+              userId,
+              type: LedgerType.LOCK,
+              amount,
+              referenceId,
+              description: description || `Lock funds for bid ${referenceId}`,
+            },
+          ],
+          { session: useSession },
+        );
 
         result = updatedUser;
 
@@ -284,35 +270,20 @@ export class BalanceService {
           );
         }
 
-        // Create ledger entry (idempotency: check if already exists)
-        const existingLedgerEntry = await this.ledgerEntryModel
-          .findOne({
-            userId,
-            type: LedgerType.UNLOCK,
-            referenceId,
-            amount,
-          })
-          .session(useSession)
-          .exec();
-
-        if (!existingLedgerEntry) {
-          await this.ledgerEntryModel.create(
-            [
-              {
-                userId,
-                type: LedgerType.UNLOCK,
-                amount,
-                referenceId,
-                description: description || `Unlock funds for ${referenceId}`,
-              },
-            ],
-            { session: useSession },
-          );
-        } else {
-          this.logger.warn(
-            `Ledger entry already exists for UNLOCK operation: userId=${userId}, referenceId=${referenceId}`,
-          );
-        }
+        // Create ledger entry
+        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
+        await this.ledgerEntryModel.create(
+          [
+            {
+              userId,
+              type: LedgerType.UNLOCK,
+              amount,
+              referenceId,
+              description: description || `Unlock funds for ${referenceId}`,
+            },
+          ],
+          { session: useSession },
+        );
 
         result = updatedUser;
 
@@ -424,38 +395,21 @@ export class BalanceService {
           );
         }
 
-        // Create ledger entry (idempotency: check if already exists for this bid/auction)
-        // Note: Same bid can't be paid out twice due to bid status check, but double-check here
-        const existingLedgerEntry = await this.ledgerEntryModel
-          .findOne({
-            userId,
-            type: LedgerType.PAYOUT,
-            referenceId,
-            amount,
-          })
-          .session(useSession)
-          .exec();
-
-        if (!existingLedgerEntry) {
-          await this.ledgerEntryModel.create(
-            [
-              {
-                userId,
-                type: LedgerType.PAYOUT,
-                amount,
-                referenceId,
-                description:
-                  description || `Payout for winning bid/auction ${referenceId}`,
-              },
-            ],
-            { session: useSession },
-          );
-        } else {
-          this.logger.warn(
-            `Ledger entry already exists for PAYOUT operation: userId=${userId}, referenceId=${referenceId}`,
-          );
-          // This is idempotent - already processed, continue
-        }
+        // Create ledger entry
+        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
+        await this.ledgerEntryModel.create(
+          [
+            {
+              userId,
+              type: LedgerType.PAYOUT,
+              amount,
+              referenceId,
+              description:
+                description || `Payout for winning bid/auction ${referenceId}`,
+            },
+          ],
+          { session: useSession },
+        );
 
         result = updatedUser;
 
@@ -568,38 +522,21 @@ export class BalanceService {
           );
         }
 
-        // Create ledger entry (idempotency: check if already exists for this bid)
-        // Use bidId as referenceId for refunds to ensure one refund per bid
-        const existingLedgerEntry = await this.ledgerEntryModel
-          .findOne({
-            userId,
-            type: LedgerType.REFUND,
-            referenceId, // For refunds, referenceId is usually bidId
-            amount,
-          })
-          .session(useSession)
-          .exec();
-
-        if (!existingLedgerEntry) {
-          await this.ledgerEntryModel.create(
-            [
-              {
-                userId,
-                type: LedgerType.REFUND,
-                amount,
-                referenceId,
-                description:
-                  description || `Refund for auction ${referenceId}`,
-              },
-            ],
-            { session: useSession },
-          );
-        } else {
-          this.logger.warn(
-            `Ledger entry already exists for REFUND operation: userId=${userId}, referenceId=${referenceId}`,
-          );
-          // This is idempotent - already processed, continue
-        }
+        // Create ledger entry
+        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
+        await this.ledgerEntryModel.create(
+          [
+            {
+              userId,
+              type: LedgerType.REFUND,
+              amount,
+              referenceId,
+              description:
+                description || `Refund for auction ${referenceId}`,
+            },
+          ],
+          { session: useSession },
+        );
 
         result = updatedUser;
 

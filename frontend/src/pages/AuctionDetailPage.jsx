@@ -363,7 +363,7 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
               }}
             />
           ) : (
-            <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No image</div>
+            <div className="auction-card-image-placeholder" style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No image</div>
           )}
         </div>
         <h2>{giftInfo.title || 'Auction'}</h2>
@@ -564,7 +564,7 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
                       borderRadius: '6px',
                       border: '1px solid rgba(245, 158, 11, 0.3)',
                     }}>
-                      ⚠ This bid is from Round {userBidInTop.roundIndex + 1} (carried over to Round {auction.currentRound + 1})
+                      This bid is from Round {userBidInTop.roundIndex + 1} (carried over to Round {auction.currentRound + 1})
                     </div>
                   );
                 }
@@ -572,11 +572,11 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
               })()}
               {userPosition.canWin ? (
                 <div style={{ color: 'var(--success)', fontWeight: '600', fontSize: '16px' }}>
-                  ✓ You can win! (within top {gifts?.giftsPerRound ?? 0} winners)
+                  You can win (within top {gifts?.giftsPerRound ?? 0} winners)
                 </div>
               ) : (
                 <div style={{ color: 'var(--error)', fontWeight: '600', fontSize: '16px' }}>
-                  ✗ You're outbid! (need to be in top {gifts?.giftsPerRound ?? 0} winners)
+                  You're outbid (need to be in top {gifts?.giftsPerRound ?? 0} winners)
                 </div>
               )}
             </div>

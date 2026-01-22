@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { BidService } from './bid.service';
 import { Bid, BidSchema } from '../../models/bid.schema';
 import { Auction, AuctionSchema } from '../../models/auction.schema';
+import { User, UserSchema } from '../../models/user.schema';
 import { BalanceModule } from '../balance/balance.module';
 import { RedisLockModule } from '../redis-lock/redis-lock.module';
 
@@ -18,6 +19,7 @@ import { RedisLockModule } from '../redis-lock/redis-lock.module';
     MongooseModule.forFeature([
       { name: Bid.name, schema: BidSchema },
       { name: Auction.name, schema: AuctionSchema },
+      { name: User.name, schema: UserSchema }, // Added for balance validation inside transaction
     ]),
     BalanceModule,
     RedisLockModule, // Optional Redis locks for high-load scenarios

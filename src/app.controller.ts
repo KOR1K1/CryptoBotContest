@@ -1,4 +1,5 @@
 import { Controller, Get, Optional, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AppService } from './app.service';
 
@@ -11,6 +12,7 @@ const MONGODB_METRICS_SERVICE = 'MongoDBMetricsService';
 export class AppController {
   constructor(
     private readonly appService: AppService,
+    private readonly configService: ConfigService,
     @Optional() @Inject(MONGODB_METRICS_SERVICE) private readonly mongoDBMetricsService?: any,
   ) {}
 
@@ -92,6 +94,61 @@ export class AppController {
     return {
       timestamp: new Date().toISOString(),
       ...poolUsage,
+    };
+  }
+
+  /**
+   * GET /system/resources
+   * Get detected system resources and configuration
+   * Shows auto-detected values for MongoDB cache and connection pool
+   * 
+   * @returns System resources and configuration
+   */
+  @Get('system/resources')
+  @ApiOperation({ 
+    summary: 'Get system resources', 
+    description: 'Returns detected system resources (RAM, CPU) and auto-detected MongoDB configuration' 
+  })
+  @ApiResponse({ status: 200, description: 'System resources retrieved successfully' })
+  async getSystemResources() {
+    const { SystemResources } = await import('./config/system-resources');
+    const systemInfo = SystemResources.getSystemInfo();
+    
+    // Check if values were set via environment variables
+    const cacheFromEnv = process.env.MONGO_WIREDTIGER_CACHE_SIZE_GB;
+    const poolFromEnv = process.env.MONGO_MAX_POOL_SIZE;
+    
+    // Get configured values from ConfigService
+    const configuredCache = this.configService.get<number>('mongodb.wiredTigerCacheSizeGB', systemInfo.mongoDBCache);
+    const configuredMaxPool = this.configService.get<number>('mongodb.maxPoolSize', systemInfo.mongoDBPool.max);
+    const configuredMinPool = this.configService.get<number>('mongodb.minPoolSize', systemInfo.mongoDBPool.min);
+    
+    return {
+      timestamp: new Date().toISOString(),
+      system: {
+        totalRAM: `${systemInfo.totalRAM}GB`,
+        availableRAM: `${systemInfo.availableRAM}GB`,
+        cpuCores: systemInfo.cpuCores,
+      },
+      mongodb: {
+        cache: {
+          autoDetected: systemInfo.mongoDBCache,
+          configured: configuredCache,
+          source: cacheFromEnv ? 'environment' : 'auto-detected',
+        },
+        connectionPool: {
+          autoDetected: {
+            max: systemInfo.mongoDBPool.max,
+            min: systemInfo.mongoDBPool.min,
+          },
+          configured: {
+            max: configuredMaxPool,
+            min: configuredMinPool,
+          },
+          source: poolFromEnv ? 'environment' : 'auto-detected',
+        },
+      },
+      note: 'Values are auto-detected based on system resources. Set MONGO_WIREDTIGER_CACHE_SIZE_GB and MONGO_MAX_POOL_SIZE in .env to override.',
     };
   }
 }

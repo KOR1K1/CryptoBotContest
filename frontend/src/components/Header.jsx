@@ -122,7 +122,7 @@ const Header = ({ users, currentUserId, onUserChange, onUserCreated }) => {
 
   return (
     <header>
-      <h1>🎁 Auction System Demo</h1>
+      <h1>Auction System</h1>
       <div className="user-section">
         <div className="user-selector">
           <label>User:</label>
@@ -137,37 +137,23 @@ const Header = ({ users, currentUserId, onUserChange, onUserCreated }) => {
               </option>
             ))}
           </select>
-          <button onClick={() => setShowUserModal(true)}>New User</button>
+          <button className="btn-secondary" onClick={() => setShowUserModal(true)}>New User</button>
         </div>
         {currentUserId && (
-          <div className="balance-display" style={{
-            display: 'flex',
-            gap: '20px',
-            flexWrap: 'wrap',
-            padding: '16px',
-            background: 'rgba(99, 102, 241, 0.1)',
-            borderRadius: '12px',
-            border: '1px solid rgba(99, 102, 241, 0.3)',
-          }}>
+          <div className="balance-display">
             <div className="balance-item">
-              <span className="label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                💰 Balance
-              </span>
-              <span className="value" style={{ fontSize: '20px' }}>{balance.balance.toFixed(2)}</span>
+              <span className="label">Available</span>
+              <span className="value">{balance.balance.toFixed(2)}</span>
             </div>
             <div className="balance-item">
-              <span className="label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                🔒 Locked
-              </span>
-              <span className="value" style={{ fontSize: '20px', color: balance.lockedBalance > 0 ? 'var(--warning)' : 'var(--accent-secondary)' }}>
+              <span className="label">Locked</span>
+              <span className="value" style={{ color: balance.lockedBalance > 0 ? 'var(--warning)' : 'var(--accent-secondary)' }}>
                 {balance.lockedBalance.toFixed(2)}
               </span>
             </div>
             <div className="balance-item">
-              <span className="label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                📊 Total
-              </span>
-              <span className="value" style={{ fontSize: '20px', color: 'var(--success)' }}>
+              <span className="label">Total</span>
+              <span className="value" style={{ color: 'var(--success)' }}>
                 {balance.total.toFixed(2)}
               </span>
             </div>

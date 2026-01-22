@@ -1,24 +1,42 @@
-export default () => ({
-  port: parseInt(process.env.PORT || '3000', 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/auction_db',
-  mongodb: {
-    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/auction_db',
-    wiredTigerCacheSizeGB: parseInt(process.env.MONGO_WIREDTIGER_CACHE_SIZE_GB || '4', 10), // Default: 4GB (for development)
-    // Production recommendation: 50% of available RAM
-    // For 8GB RAM: 4GB
-    // For 16GB RAM: 8GB
-    // For 32GB RAM: 16GB
-    // Connection Pool Configuration
-    // Production recommendation: maxPoolSize 50-100 for single server, minPoolSize 5-10
-    // For high load (100k+ bids/round): maxPoolSize 75-100, minPoolSize 10
-    // For medium load (10k-100k bids/round): maxPoolSize 50-75, minPoolSize 5
-    maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE || '150', 10), // Default: 150 (optimized for high load), Production: 100-200
-    minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE || '10', 10), // Default: 10 (optimized for high load), Production: 10-20
-    maxIdleTimeMS: parseInt(process.env.MONGO_MAX_IDLE_TIME_MS || '30000', 10), // Default: 30 seconds (30000ms)
-    // Close idle connections after 30 seconds of inactivity
-    // This prevents connection leaks and allows MongoDB to free up resources
-  },
+import { SystemResources } from './system-resources';
+
+export default () => {
+  // Auto-detect system resources if not explicitly set
+  const systemInfo = SystemResources.getSystemInfo();
+  
+  // Use environment variables if set, otherwise auto-detect
+  const mongoDBCacheSizeGB = process.env.MONGO_WIREDTIGER_CACHE_SIZE_GB
+    ? parseInt(process.env.MONGO_WIREDTIGER_CACHE_SIZE_GB, 10)
+    : systemInfo.mongoDBCache;
+  
+  const mongoDBPool = process.env.MONGO_MAX_POOL_SIZE
+    ? {
+        maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE, 10),
+        minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE || '10', 10),
+      }
+    : {
+        maxPoolSize: systemInfo.mongoDBPool.max,
+        minPoolSize: systemInfo.mongoDBPool.min,
+      };
+
+  return {
+    port: parseInt(process.env.PORT || '3000', 10),
+    nodeEnv: process.env.NODE_ENV || 'development',
+    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/auction_db',
+    mongodb: {
+      uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/auction_db',
+      wiredTigerCacheSizeGB: mongoDBCacheSizeGB, // Auto-detected or from env
+      // Auto-detected based on system resources:
+      // - Small systems (<4GB RAM): 1GB cache, 20-30 connections
+      // - Medium systems (4-16GB RAM): 2-8GB cache, 50-100 connections
+      // - Large systems (16-64GB RAM): 16-32GB cache, 100-300 connections
+      // - Very large systems (>64GB RAM): 32GB cache, 300-500 connections
+      maxPoolSize: mongoDBPool.maxPoolSize, // Auto-detected or from env
+      minPoolSize: mongoDBPool.minPoolSize, // Auto-detected or from env
+      maxIdleTimeMS: parseInt(process.env.MONGO_MAX_IDLE_TIME_MS || '30000', 10), // Default: 30 seconds (30000ms)
+      // Close idle connections after 30 seconds of inactivity
+      // This prevents connection leaks and allows MongoDB to free up resources
+    },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
@@ -59,5 +77,6 @@ export default () => ({
   cors: {
     origins: process.env.CORS_ORIGINS || 'http://localhost:3001,http://localhost:3000',
   },
-});
+  };
+}
 

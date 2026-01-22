@@ -107,11 +107,16 @@ const AuctionsPage = ({ onAuctionClick }) => {
                     alt={auction.giftInfo.title}
                     className="auction-card-image"
                     onError={(e) => {
-                      e.target.parentElement.innerHTML = '<div class="auction-card-image">🎁</div>';
+                      e.target.style.display = 'none';
+                      const placeholder = e.target.parentElement.querySelector('.auction-card-image-placeholder');
+                      if (placeholder) placeholder.style.display = 'flex';
                     }}
                   />
-                ) : (
-                  <div className="auction-card-image">🎁</div>
+                ) : null}
+                {!auction.giftInfo.imageUrl && (
+                  <div className="auction-card-image auction-card-image-placeholder">
+                    <span>No Image</span>
+                  </div>
                 )}
                 <div className="auction-card-content">
                   <h3>{auction.giftInfo.title || 'Auction'}</h3>
@@ -138,17 +143,9 @@ const AuctionsPage = ({ onAuctionClick }) => {
                     </div>
                   )}
                 {auction.status === 'RUNNING' && (
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '8px 12px',
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    color: 'var(--success)',
-                    fontWeight: '600',
-                    textAlign: 'center',
-                  }}>
-                    🔴 LIVE
+                  <div className="status-badge status-badge-live">
+                    <span className="status-badge-dot"></span>
+                    LIVE
                   </div>
                 )}
                 </div>

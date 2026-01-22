@@ -49,7 +49,7 @@ const RoundsHistory = ({ auctionId, currentRound }) => {
       <div className="detail-section">
         <h3>Rounds History</h3>
         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--error)' }}>
-          <div style={{ marginBottom: '8px' }}>⚠️ Error loading rounds</div>
+          <div style={{ marginBottom: '8px' }}>Error loading rounds</div>
           <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{error}</div>
           <button className="btn-secondary" onClick={loadRounds} style={{ marginTop: '12px' }}>
             Retry

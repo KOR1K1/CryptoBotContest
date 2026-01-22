@@ -56,7 +56,6 @@ const InventoryPage = ({ currentUserId }) => {
           padding: '60px 20px',
           color: 'var(--error)',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
           <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Error loading inventory</div>
           <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{error}</div>
         </div>
@@ -79,7 +78,6 @@ const InventoryPage = ({ currentUserId }) => {
           padding: '60px 20px',
           color: 'var(--text-secondary)',
         }}>
-          <div style={{ fontSize: '64px', marginBottom: '16px' }}>📦</div>
           <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
             No gifts in inventory yet
           </div>
@@ -106,11 +104,16 @@ const InventoryPage = ({ currentUserId }) => {
                     alt={item.giftTitle}
                     className="inventory-item-image"
                     onError={(e) => {
-                      e.target.parentElement.innerHTML = '<div class="inventory-item-image">🎁</div>';
+                      e.target.style.display = 'none';
+                      const placeholder = e.target.parentElement.querySelector('.inventory-item-image-placeholder');
+                      if (placeholder) placeholder.style.display = 'flex';
                     }}
                   />
-                ) : (
-                  <div className="inventory-item-image">🎁</div>
+                ) : null}
+                {!item.giftImageUrl && (
+                  <div className="inventory-item-image inventory-item-image-placeholder">
+                    <span>No Image</span>
+                  </div>
                 )}
                 <div className="inventory-item-content">
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>

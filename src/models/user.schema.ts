@@ -20,7 +20,7 @@ export type UserDocument = User & Document;
   // Mongoose automatically tracks document version for optimistic concurrency control
 })
 export class User {
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   username!: string;
 
   /**

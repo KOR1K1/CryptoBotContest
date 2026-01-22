@@ -18,6 +18,28 @@ async function bootstrap() {
 
   app.useLogger(logger);
 
+  // Log auto-detected system resources (if not explicitly set in env)
+  if (!process.env.MONGO_WIREDTIGER_CACHE_SIZE_GB || !process.env.MONGO_MAX_POOL_SIZE) {
+    const { SystemResources } = await import('./config/system-resources');
+    const systemInfo = SystemResources.getSystemInfo();
+    
+    const dockerInfo = systemInfo.isDocker
+      ? ` (Docker container${systemInfo.dockerMemoryLimit ? `, memory limit: ${systemInfo.dockerMemoryLimit}GB` : ''}${systemInfo.dockerCPULimit ? `, CPU limit: ${systemInfo.dockerCPULimit}` : ''})`
+      : '';
+    
+    logger.log({
+      action: 'system-resources-detected',
+      totalRAM: `${systemInfo.totalRAM}GB`,
+      availableRAM: `${systemInfo.availableRAM}GB`,
+      cpuCores: systemInfo.cpuCores,
+      mongoDBCache: `${systemInfo.mongoDBCache}GB`,
+      mongoDBPool: `${systemInfo.mongoDBPool.min}-${systemInfo.mongoDBPool.max}`,
+      isDocker: systemInfo.isDocker,
+      dockerMemoryLimit: systemInfo.dockerMemoryLimit,
+      dockerCPULimit: systemInfo.dockerCPULimit,
+    }, `Auto-detected system resources: ${systemInfo.totalRAM}GB RAM, ${systemInfo.cpuCores} CPU cores${dockerInfo}. MongoDB: ${systemInfo.mongoDBCache}GB cache, ${systemInfo.mongoDBPool.min}-${systemInfo.mongoDBPool.max} connections`);
+  }
+
   // Security: Helmet for security headers
   // Protects against common vulnerabilities (XSS, clickjacking, etc.)
   app.use(

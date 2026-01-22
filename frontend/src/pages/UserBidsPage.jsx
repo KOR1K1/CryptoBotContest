@@ -52,7 +52,6 @@ const UserBidsPage = ({ currentUserId }) => {
           padding: '60px 20px',
           color: 'var(--error)',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
           <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Error loading bids</div>
           <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{error}</div>
         </div>
@@ -75,7 +74,6 @@ const UserBidsPage = ({ currentUserId }) => {
           padding: '60px 20px',
           color: 'var(--text-secondary)',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>💰</div>
           <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>No bids yet</div>
           <div style={{ fontSize: '14px' }}>Place a bid on an auction to see it here!</div>
         </div>
@@ -96,10 +94,12 @@ const UserBidsPage = ({ currentUserId }) => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '24px',
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  color: 'white',
                   flexShrink: 0,
                 }}>
-                  {bid.status === 'WON' ? '🏆' : bid.status === 'ACTIVE' ? '⏳' : '💸'}
+                  {bid.status === 'WON' ? 'W' : bid.status === 'ACTIVE' ? 'A' : 'R'}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div className="bid-amount" style={{ fontSize: '22px', marginBottom: '4px' }}>
