@@ -113,31 +113,40 @@ const ToastContainer = () => {
   };
 
   return (
-    <div className="fixed top-5 right-5 z-50 flex flex-col gap-3 pointer-events-none max-w-sm w-full">
+    <div 
+      className="fixed top-2 right-2 sm:top-5 sm:right-5 left-2 sm:left-auto z-50 flex flex-col gap-2 sm:gap-3 pointer-events-none max-w-sm sm:max-w-sm w-auto sm:w-full"
+      style={{
+        top: 'max(0.5rem, env(safe-area-inset-top, 0.5rem))',
+        right: 'max(0.5rem, env(safe-area-inset-right, 0.5rem))',
+        left: 'max(0.5rem, env(safe-area-inset-left, 0.5rem))',
+      }}
+    >
       {toastList.map(toast => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border backdrop-blur-sm bg-bg-card/95 shadow-xl animate-slide-in-right ${getTypeClasses(toast.type)}`}
+          className={`pointer-events-auto flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg border backdrop-blur-sm bg-bg-card/95 shadow-xl animate-slide-in-right ${getTypeClasses(toast.type)}`}
           role="alert"
           aria-live="polite"
         >
           {/* Icon */}
-          <div className="flex-shrink-0 mt-0.5">
-            {getIcon(toast.type)}
+          <div className="shrink-0 mt-0.5">
+            <div className="w-4 h-4 sm:w-5 sm:h-5">
+              {getIcon(toast.type)}
+            </div>
           </div>
 
           {/* Message */}
-          <div className="flex-1 text-sm font-medium">
+          <div className="flex-1 text-xs sm:text-sm font-medium wrap-break-word">
             {toast.message}
           </div>
 
           {/* Close Button */}
           <button
             onClick={() => removeToast(toast.id)}
-            className="flex-shrink-0 text-text-muted hover:text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-primary rounded p-0.5"
+            className="shrink-0 text-text-muted hover:text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-primary rounded p-0.5"
             aria-label="Close notification"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

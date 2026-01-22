@@ -148,7 +148,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Info Message */}
         <div className="p-3 bg-status-info/10 border border-status-info/30 rounded-lg text-status-info text-sm">
           <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Gift Selection */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -239,7 +239,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
           )}
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-border">
             <Button
               type="button"
               variant="ghost"

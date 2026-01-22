@@ -33,7 +33,7 @@ const Modal = ({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
-    full: 'max-w-full mx-4',
+    full: 'max-w-full mx-2 sm:mx-4',
   };
 
   // Обработка ESC
@@ -94,34 +94,40 @@ const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto safe-area-inset"
       onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'modal-title' : undefined}
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0.5rem)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0.5rem)',
+        paddingLeft: 'env(safe-area-inset-left, 0.5rem)',
+        paddingRight: 'env(safe-area-inset-right, 0.5rem)',
+      }}
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-normal"
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-normal"
         aria-hidden="true"
       />
 
       {/* Modal Content */}
       <div
         ref={modalRef}
-        className={`relative z-10 w-full ${sizeClasses[size]} bg-bg-card border border-border rounded-xl shadow-xl transform transition-all duration-normal ${className}`}
+        className={`relative z-10 w-full ${sizeClasses[size]} bg-bg-card border border-border rounded-xl shadow-xl transform transition-all duration-normal my-auto max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] flex flex-col ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Header - фиксированный */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 id="modal-title" className="text-xl font-semibold text-text-primary">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
+            <h2 id="modal-title" className="text-lg sm:text-xl font-semibold text-text-primary pr-2">
               {title}
             </h2>
             {closeOnBackdropClick && (
               <button
                 onClick={onClose}
-                className="text-text-muted hover:text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-primary rounded-lg p-1"
+                className="text-text-muted hover:text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-primary rounded-lg p-1 shrink-0"
                 aria-label="Close modal"
               >
                 <svg
@@ -142,8 +148,8 @@ const Modal = ({
           </div>
         )}
 
-        {/* Body */}
-        <div className={title ? 'px-6 py-4' : 'p-6'}>
+        {/* Body - скроллируемый */}
+        <div className={`${title ? 'px-4 sm:px-6 py-4' : 'p-4 sm:p-6'} overflow-y-auto flex-1 min-h-0`}>
           {children}
         </div>
       </div>

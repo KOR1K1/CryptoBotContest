@@ -177,7 +177,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Gift Selection */}
         <div>
           <label className="block text-sm font-medium text-text-secondary mb-2">
@@ -222,7 +222,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
         </div>
 
         {/* Total Gifts and Total Rounds */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <Tooltip content="Number of gifts to be distributed (1-1000)">
             <Input
               label="Total Gifts"
@@ -279,7 +279,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
         </div>
 
         {/* Round Duration and Minimum Bid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <Tooltip content="Duration of each round in seconds">
             <Input
               label="Round Duration (seconds)"
@@ -342,7 +342,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-border">
           <Button
             type="button"
             variant="ghost"

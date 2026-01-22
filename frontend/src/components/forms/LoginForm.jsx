@@ -61,7 +61,7 @@ const LoginForm = ({ onSubmit, loading = false, error = null }) => {
 
   return (
     <Card variant="elevated" className="p-8">
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Username Field */}
         <div>
           <Tooltip content="Enter your username (minimum 3 characters)" position="top">

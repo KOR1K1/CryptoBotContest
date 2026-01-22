@@ -105,6 +105,17 @@
     color: #ffffff;
     min-height: 100vh;
     line-height: 1.6;
+    /* Предотвращаем zoom на iOS при фокусе на input */
+    -webkit-text-size-adjust: 100%;
+    /* Улучшаем touch на мобильных */
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Улучшаем touch targets на мобильных */
+  @media (max-width: 640px) {
+    button, a, input, select, textarea {
+      touch-action: manipulation;
+    }
   }
 }
 

@@ -163,7 +163,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Title Input */}
         <Tooltip content={`Title must be 1-${TITLE_MAX_LENGTH} characters`}>
           <Input
@@ -250,7 +250,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
         </Tooltip>
 
         {/* Base Price and Total Supply */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <Tooltip content="Base price of the gift">
             <Input
               label="Base Price"
@@ -314,12 +314,13 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-border">
           <Button
             type="button"
             variant="ghost"
             onClick={handleClose}
             disabled={loading}
+            className="min-h-[44px] sm:min-h-0"
           >
             Cancel
           </Button>
@@ -328,6 +329,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
             variant="primary"
             loading={loading}
             disabled={loading || Object.keys(validationErrors).length > 0}
+            className="min-h-[44px] sm:min-h-0"
           >
             {loading ? 'Creating...' : 'Create Gift'}
           </Button>

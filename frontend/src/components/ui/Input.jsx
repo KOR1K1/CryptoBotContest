@@ -112,7 +112,7 @@ const Input = forwardRef(({
     ? 'pl-4 pr-10'
     : 'px-4';
   
-  const inputClasses = `${baseInputClasses} ${stateClasses} ${paddingClasses} py-2.5 text-base ${className}`;
+  const inputClasses = `${baseInputClasses} ${stateClasses} ${paddingClasses} py-2.5 sm:py-2.5 text-base min-h-[44px] sm:min-h-0 ${className}`;
 
   // Иконка для показа/скрытия пароля
   const PasswordToggle = () => {

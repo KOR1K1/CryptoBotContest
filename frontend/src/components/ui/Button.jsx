@@ -37,11 +37,11 @@ const Button = forwardRef(({
     danger: 'bg-status-error text-white hover:bg-red-600 focus:ring-status-error active:bg-red-700 shadow-md hover:shadow-lg',
   };
   
-  // Размеры
+  // Размеры (с учетом touch-friendly на мобильных)
   const sizeClasses = {
-    sm: 'px-3 py-1.5 text-sm gap-1.5',
-    md: 'px-4 py-2.5 text-base gap-2',
-    lg: 'px-6 py-3 text-lg gap-2.5',
+    sm: 'px-3 py-1.5 text-sm gap-1.5 min-h-[36px] sm:min-h-0',
+    md: 'px-4 py-2.5 text-base gap-2 min-h-[44px] sm:min-h-0',
+    lg: 'px-6 py-3 text-lg gap-2.5 min-h-[48px] sm:min-h-0',
   };
   
   // Состояние loading

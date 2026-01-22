@@ -81,7 +81,7 @@ const BidForm = ({
 
   return (
     <Card variant="elevated" className="p-6">
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Current Max Bid Info */}
         {currentMaxBid !== null && currentMaxBid > 0 && (
           <div className="p-4 bg-accent-primary/10 border border-accent-primary/30 rounded-lg">
