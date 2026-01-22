@@ -137,15 +137,15 @@ describe('Load & Stress Tests', () => {
         totalRounds: 1,
         roundDurationMs: 30000, // 30 seconds
         minBid: 100,
+        createdBy: bots[0]._id.toString(),
       });
 
-      await auctionService.startAuction(auction._id.toString());
+      await auctionService.startAuction(auction._id.toString(), bots[0]._id.toString());
 
       // Simulate bots placing bids
       const botBids = bots.map((bot, index) =>
         bidService
-          .placeBid({
-            userId: bot._id.toString(),
+          .placeBid(bot._id.toString(), {
             auctionId: auction._id.toString(),
             amount: BID_AMOUNT_BASE + index * 100, // Different amounts
             currentRound: 0,
@@ -225,9 +225,10 @@ describe('Load & Stress Tests', () => {
         totalRounds: 1,
         roundDurationMs: 60000,
         minBid: 100,
+        createdBy: users[0]._id.toString(),
       });
 
-      await auctionService.startAuction(auction._id.toString());
+      await auctionService.startAuction(auction._id.toString(), users[0]._id.toString());
 
       // Create many concurrent bid requests
       const allBids: Promise<unknown>[] = [];
@@ -235,8 +236,7 @@ describe('Load & Stress Tests', () => {
         for (let i = 0; i < CONCURRENT_BIDS_PER_USER; i++) {
           allBids.push(
             bidService
-              .placeBid({
-                userId: user._id.toString(),
+              .placeBid(user._id.toString(), {
                 auctionId: auction._id.toString(),
                 amount: BID_AMOUNT + i * 10, // Increasing amounts
                 currentRound: 0,
@@ -318,9 +318,10 @@ describe('Load & Stress Tests', () => {
         totalRounds: 1,
         roundDurationMs: ROUND_DURATION_MS,
         minBid: 100,
+        createdBy: users[0]._id.toString(),
       });
 
-      await auctionService.startAuction(auction._id.toString());
+      await auctionService.startAuction(auction._id.toString(), users[0]._id.toString());
 
       // Get round start time
       const round = await auctionRoundModel
@@ -336,8 +337,7 @@ describe('Load & Stress Tests', () => {
 
       // Place some early bids
       for (let i = 0; i < 3; i++) {
-        await bidService.placeBid({
-          userId: users[i]._id.toString(),
+        await bidService.placeBid(users[i]._id.toString(), {
           auctionId: auction._id.toString(),
           amount: 1000 + i * 100,
           currentRound: 0,
@@ -352,8 +352,7 @@ describe('Load & Stress Tests', () => {
 
       // Place late bids simultaneously (near round end)
       const lateBids = users.slice(3).map((user, index) =>
-        bidService.placeBid({
-          userId: user._id.toString(),
+        bidService.placeBid(user._id.toString(), {
           auctionId: auction._id.toString(),
           amount: 1500 + index * 50,
           currentRound: 0,
@@ -424,9 +423,10 @@ describe('Load & Stress Tests', () => {
           totalRounds: 2,
           roundDurationMs: 10000,
           minBid: 100,
+          createdBy: users[0]._id.toString(),
         });
 
-        await auctionService.startAuction(auction._id.toString());
+        await auctionService.startAuction(auction._id.toString(), users[0]._id.toString());
         auctions.push(auction);
       }
 
@@ -436,8 +436,7 @@ describe('Load & Stress Tests', () => {
         for (const user of users) {
           allBids.push(
             bidService
-              .placeBid({
-                userId: user._id.toString(),
+              .placeBid(user._id.toString(), {
                 auctionId: auction._id.toString(),
                 amount: BID_AMOUNT + Math.floor(Math.random() * 500),
                 currentRound: 0,

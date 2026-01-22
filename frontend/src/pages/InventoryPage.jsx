@@ -1,9 +1,23 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 import AddGiftModal from '../components/AddGiftModal';
-import { showToast } from '../components/Toast';
+import { showToast } from '../components/ui/Toast';
+import GiftCard from '../components/features/GiftCard';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Loading from '../components/ui/Loading';
+import Tooltip from '../components/ui/Tooltip';
+import EmptyState from '../components/ui/EmptyState';
 
-const InventoryPage = ({ currentUserId }) => {
+/**
+ * InventoryPage Component
+ * 
+ * Страница инвентаря пользователя с улучшенным дизайном
+ */
+const InventoryPage = () => {
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,7 +35,7 @@ const InventoryPage = ({ currentUserId }) => {
       setInventory(inventoryData);
     } catch (error) {
       console.error('Error loading inventory:', error);
-      setError(error.message);
+      setError(error.message || 'Failed to load inventory');
       showToast(`Failed to load inventory: ${error.message}`, 'error');
     } finally {
       setLoading(false);
@@ -32,135 +46,137 @@ const InventoryPage = ({ currentUserId }) => {
     loadInventory();
   }, [currentUserId]);
 
-  if (!currentUserId) {
+  // Loading State
+  if (loading) {
     return (
-      <div className="loading">Please select a user to view inventory</div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">My Inventory</h1>
+            <p className="text-text-secondary">Loading your gifts...</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} variant="elevated">
+              <Loading.Skeleton variant="rectangular" height="h-48" className="mb-4" />
+              <Loading.Skeleton variant="text" width="w-3/4" height="h-6" className="mb-2" />
+              <Loading.Skeleton variant="text" width="w-1/2" height="h-4" />
+            </Card>
+          ))}
+        </div>
+      </div>
     );
   }
 
-  if (loading) {
-    return <div className="loading">Loading inventory...</div>;
-  }
-
-  if (error) {
+  // Error State
+  if (error && inventory.length === 0) {
     return (
-      <div className="page active">
-        <div className="page-header">
-          <h2>My Inventory</h2>
-          <button className="btn-primary" onClick={loadInventory}>
-            Retry
-          </button>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">My Inventory</h1>
+            <p className="text-text-secondary">Something went wrong</p>
+          </div>
         </div>
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 20px',
-          color: 'var(--error)',
-        }}>
-          <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Error loading inventory</div>
-          <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{error}</div>
-        </div>
+        <Card variant="elevated" className="p-8 text-center">
+          <div className="space-y-4">
+            <div className="text-status-error text-6xl">⚠️</div>
+            <h2 className="text-2xl font-semibold text-text-primary">Failed to Load Inventory</h2>
+            <p className="text-text-secondary">{error}</p>
+            <Button
+              variant="primary"
+              onClick={loadInventory}
+            >
+              Retry
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="page active">
-      <div className="page-header">
-        <h2>My Inventory</h2>
-        <button className="btn-primary" onClick={loadInventory}>
-          Refresh
-        </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-text-primary mb-2">My Inventory</h1>
+          <p className="text-text-secondary">
+            {inventory.length} {inventory.length === 1 ? 'gift' : 'gifts'} in your collection
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <Tooltip content="Refresh inventory list">
+            <Button
+              variant="secondary"
+              onClick={loadInventory}
+              leftIcon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              }
+            >
+              Refresh
+            </Button>
+          </Tooltip>
+          
+          <Tooltip content="Add a gift to your inventory (Demo)">
+            <Button
+              variant="primary"
+              onClick={() => setShowAddModal(true)}
+              leftIcon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              }
+            >
+              Add Gift
+            </Button>
+          </Tooltip>
+        </div>
       </div>
 
+      {/* Inventory Grid */}
       {inventory.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '60px 20px',
-          color: 'var(--text-secondary)',
-        }}>
-          <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
-            No gifts in inventory yet
-          </div>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
-            Win an auction to get gifts!
-          </p>
-          <button className="btn-secondary" onClick={() => setShowAddModal(true)}>
-            Add Gift to Inventory (Demo)
-          </button>
-        </div>
+        <EmptyState
+          icon="🎁"
+          title="No Gifts Yet"
+          message="Win an auction to get gifts! Your won gifts will appear here."
+          action={
+            <Tooltip content="Add a gift to your inventory for testing purposes">
+              <Button
+                variant="secondary"
+                onClick={() => setShowAddModal(true)}
+                leftIcon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                }
+              >
+                Add Gift (Demo)
+              </Button>
+            </Tooltip>
+          }
+        />
       ) : (
-        <>
-          <div style={{ marginBottom: '16px' }}>
-            <button className="btn-secondary" onClick={() => setShowAddModal(true)}>
-              Add Gift to Inventory (Demo)
-            </button>
-          </div>
-          <div className="inventory-grid">
-            {inventory.map((item) => (
-              <div key={item.bidId} className="inventory-item">
-                {item.giftImageUrl ? (
-                  <img
-                    src={item.giftImageUrl}
-                    alt={item.giftTitle}
-                    className="inventory-item-image"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      const placeholder = e.target.parentElement.querySelector('.inventory-item-image-placeholder');
-                      if (placeholder) placeholder.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                {!item.giftImageUrl && (
-                  <div className="inventory-item-image inventory-item-image-placeholder">
-                    <span>No Image</span>
-                  </div>
-                )}
-                <div className="inventory-item-content">
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <h3 style={{ flex: 1 }}>{item.giftTitle}</h3>
-                    <span className="badge badge-success" style={{ fontSize: '10px' }}>WON</span>
-                  </div>
-                  {item.giftDescription && (
-                    <div className="description" style={{ marginBottom: '12px' }}>{item.giftDescription}</div>
-                  )}
-                  <div className="bid-info" style={{
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    marginTop: '12px',
-                  }}>
-                    <div className="bid-info-label">Won for</div>
-                    <div className="bid-info-value" style={{ color: 'var(--success)' }}>
-                      {item.bidAmount.toFixed(2)}
-                    </div>
-                  </div>
-                  <div style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    marginTop: '12px',
-                    paddingTop: '12px',
-                    borderTop: '1px solid var(--border)',
-                  }}>
-                    Round {item.roundIndex + 1} • {new Date(item.wonAt).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {inventory.map((item) => (
+            <GiftCard key={item.bidId} item={item} />
+          ))}
+        </div>
       )}
 
-      {showAddModal && (
-        <AddGiftModal
-          currentUserId={currentUserId}
-          onClose={() => setShowAddModal(false)}
-          onAdded={() => {
-            setShowAddModal(false);
-            loadInventory();
-          }}
-        />
-      )}
+      {/* Add Gift Modal */}
+      <AddGiftModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdded={() => {
+          setShowAddModal(false);
+          loadInventory();
+        }}
+      />
     </div>
   );
 };

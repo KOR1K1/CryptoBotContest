@@ -1,35 +1,34 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiRequest } from '../api/client';
-import UserModal from './UserModal';
+import { useAuth } from '../contexts/AuthContext';
 
-const Header = ({ users, currentUserId, onUserChange, onUserCreated }) => {
-  const [showUserModal, setShowUserModal] = useState(false);
+const Header = () => {
+  const { user, logout } = useAuth();
   const [balance, setBalance] = useState({ balance: 0, lockedBalance: 0, total: 0 });
-  const [selectedUsername, setSelectedUsername] = useState('None');
   const balanceIntervalRef = useRef(null);
 
   // Load balance when user changes
-  const handleUserSelect = async (userId) => {
-    onUserChange(userId);
-    if (userId) {
+  useEffect(() => {
+    if (!user?.id) {
+      setBalance({ balance: 0, lockedBalance: 0, total: 0 });
+      return;
+    }
+
+    const loadBalance = async () => {
       try {
-        const user = users.find(u => u.id === userId);
-        setSelectedUsername(user?.username || 'Unknown');
-        
-        const balanceData = await apiRequest(`/users/${userId}/balance`);
+        const balanceData = await apiRequest(`/users/${user.id}/balance`);
         setBalance(balanceData);
       } catch (error) {
         console.error('Error loading user balance:', error);
       }
-    } else {
-      setSelectedUsername('None');
-      setBalance({ balance: 0, lockedBalance: 0, total: 0 });
-    }
-  };
+    };
+
+    loadBalance();
+  }, [user?.id]);
 
   // Refresh balance periodically (only when tab is visible)
   useEffect(() => {
-    if (!currentUserId) {
+    if (!user?.id) {
       return;
     }
 
@@ -49,7 +48,7 @@ const Header = ({ users, currentUserId, onUserChange, onUserCreated }) => {
       }
 
       try {
-        const updated = await apiRequest(`/users/${currentUserId}/balance`);
+        const updated = await apiRequest(`/users/${user.id}/balance`);
         setBalance(updated);
       } catch (error) {
         console.error('Error refreshing balance:', error);
@@ -118,58 +117,45 @@ const Header = ({ users, currentUserId, onUserChange, onUserCreated }) => {
       window.removeEventListener('blur', handleWindowBlur);
       window.removeEventListener('focus', handleWindowFocus);
     };
-  }, [currentUserId]);
+  }, [user?.id]);
 
   return (
     <header>
       <h1>Auction System</h1>
       <div className="user-section">
-        <div className="user-selector">
-          <label>User:</label>
-          <select
-            value={currentUserId || ''}
-            onChange={(e) => handleUserSelect(e.target.value)}
-          >
-            <option value="">Select User...</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.username} (Balance: {user.balance.toFixed(2)})
-              </option>
-            ))}
-          </select>
-          <button className="btn-secondary" onClick={() => setShowUserModal(true)}>New User</button>
-        </div>
-        {currentUserId && (
-          <div className="balance-display">
-            <div className="balance-item">
-              <span className="label">Available</span>
-              <span className="value">{balance.balance.toFixed(2)}</span>
+        {user ? (
+          <>
+            <div className="user-info">
+              <span className="username">{user.username || user.id}</span>
+              <button className="btn-secondary" onClick={logout} style={{ marginLeft: '1rem' }}>
+                Logout
+              </button>
             </div>
-            <div className="balance-item">
-              <span className="label">Locked</span>
-              <span className="value" style={{ color: balance.lockedBalance > 0 ? 'var(--warning)' : 'var(--accent-secondary)' }}>
-                {balance.lockedBalance.toFixed(2)}
-              </span>
+            <div className="balance-display">
+              <div className="balance-item">
+                <span className="label">Available</span>
+                <span className="value">{balance.balance.toFixed(2)}</span>
+              </div>
+              <div className="balance-item">
+                <span className="label">Locked</span>
+                <span className="value" style={{ color: balance.lockedBalance > 0 ? 'var(--warning)' : 'var(--accent-secondary)' }}>
+                  {balance.lockedBalance.toFixed(2)}
+                </span>
+              </div>
+              <div className="balance-item">
+                <span className="label">Total</span>
+                <span className="value" style={{ color: 'var(--success)' }}>
+                  {balance.total.toFixed(2)}
+                </span>
+              </div>
             </div>
-            <div className="balance-item">
-              <span className="label">Total</span>
-              <span className="value" style={{ color: 'var(--success)' }}>
-                {balance.total.toFixed(2)}
-              </span>
-            </div>
+          </>
+        ) : (
+          <div className="user-info">
+            <span>Not logged in</span>
           </div>
         )}
       </div>
-      
-      {showUserModal && (
-        <UserModal
-          onClose={() => setShowUserModal(false)}
-          onCreated={() => {
-            setShowUserModal(false);
-            onUserCreated();
-          }}
-        />
-      )}
     </header>
   );
 };

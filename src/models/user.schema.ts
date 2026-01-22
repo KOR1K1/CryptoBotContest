@@ -24,6 +24,20 @@ export class User {
   username!: string;
 
   /**
+   * Hashed password (bcrypt)
+   * Not selected by default for security
+   * Use .select('+password') to include in query
+   */
+  @Prop({ required: false, select: false })
+  password?: string;
+
+  /**
+   * Email (optional, for future use)
+   */
+  @Prop({ required: false })
+  email?: string;
+
+  /**
    * Free balance available for bidding
    * Must be >= 0
    */

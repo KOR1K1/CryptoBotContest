@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 import { Logger } from 'nestjs-pino';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import helmet from 'helmet';
-const compression = require('compression');
+import compression from 'compression';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -126,18 +126,64 @@ This API provides endpoints for a multi-round auction system with:
 - **Bids**: Place and manage bids with carry-over support
 - **Users**: User management with balance tracking
 - **Gifts**: Gift catalog management
+- **Authentication**: JWT-based authentication for secure access
 
 ### Key Features
 - **Financial Integrity**: Ledger-based accounting with full audit trail
 - **Concurrency**: MongoDB transactions + optional Redis locks
 - **Real-time**: WebSocket updates for bid changes
 - **Rate Limiting**: Protected against DDoS and abuse
+- **Security**: JWT authentication with password hashing (bcrypt)
 
 ### Authentication
-Currently, the API uses userId passed in request body for user identification.
-Future versions will implement JWT-based authentication.
+
+The API uses **JWT (JSON Web Tokens)** for authentication. Most endpoints require authentication.
+
+#### Getting Started
+
+1. **Register a new user**: \`POST /auth/register\`
+   - Provide username, password, and optional email
+   - Returns JWT token and user information
+
+2. **Login**: \`POST /auth/login\`
+   - Provide username and password
+   - Returns JWT token and user information
+
+3. **Using the token**: 
+   - Include token in \`Authorization\` header: \`Bearer <your-token>\`
+   - Token expires after 24 hours (configurable)
+
+#### Protected Endpoints
+
+Endpoints marked with 🔒 require authentication:
+- Creating auctions (\`POST /auctions\`)
+- Starting auctions (\`POST /auctions/:id/start\`) - only creator can start
+- Placing bids (\`POST /auctions/:id/bids\`)
+- Managing gifts (\`POST /gifts\`, \`PUT /gifts/:id\`, \`DELETE /gifts/:id\`)
+- Accessing user-specific data (\`GET /users/:id\`, \`GET /users/:id/balance\`)
+
+#### WebSocket Authentication
+
+WebSocket connections also require JWT authentication:
+- Pass token in connection handshake: \`auth.token\` field
+- Example: \`socket.io-client\` with \`auth: { token: 'your-jwt-token' }\`
+
+#### Bot Simulator Support
+
+For load testing, the bot simulator endpoint (\`POST /auctions/:id/bids/bot\`) accepts optional authentication.
+If no token is provided, it uses \`userId\` from request body (development mode only).
     `)
     .setVersion('1.0.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+      },
+      'JWT-auth', // This name here is important for matching up with @ApiBearerAuth() in your controller!
+    )
+    .addTag('Auth', 'Authentication endpoints (register, login, get current user)')
     .addTag('Auctions', 'Auction lifecycle management')
     .addTag('Users', 'User management and balance operations')
     .addTag('Gifts', 'Gift catalog management')

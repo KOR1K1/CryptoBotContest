@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
-import { showToast } from './Toast';
+import { showToast } from './ui/Toast';
+import Card from './ui/Card';
+import Badge from './ui/Badge';
+import Loading from './ui/Loading';
+import Button from './ui/Button';
+import Tooltip from './ui/Tooltip';
 
+/**
+ * RoundsHistory Component
+ * 
+ * Компонент для отображения истории раундов аукциона с улучшенным дизайном
+ */
 const RoundsHistory = ({ auctionId, currentRound }) => {
   const [rounds, setRounds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    loadRounds();
-  }, [auctionId]);
 
   const loadRounds = async () => {
     if (!auctionId) {
@@ -30,50 +36,81 @@ const RoundsHistory = ({ auctionId, currentRound }) => {
     }
   };
 
+  // Listen for refresh events from WebSocket
+  useEffect(() => {
+    loadRounds();
+
+    const handleRefresh = (event) => {
+      const eventAuctionId = event?.detail?.auctionId;
+      if (!eventAuctionId || eventAuctionId === auctionId) {
+        const forceRefresh = event?.detail?.force === true;
+        if (forceRefresh) {
+          setTimeout(() => {
+            loadRounds();
+          }, 200);
+        } else {
+          loadRounds();
+        }
+      }
+    };
+
+    window.addEventListener('refresh-rounds', handleRefresh);
+    window.addEventListener('refresh-auction', handleRefresh);
+
+    return () => {
+      window.removeEventListener('refresh-rounds', handleRefresh);
+      window.removeEventListener('refresh-auction', handleRefresh);
+    };
+  }, [auctionId]);
+
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
   };
 
+  // Loading State
   if (loading) {
     return (
-      <div className="detail-section">
-        <h3>Rounds History</h3>
-        <div className="loading">Loading rounds...</div>
-      </div>
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Rounds History</h2>}>
+        <div className="flex items-center justify-center py-8">
+          <Loading.Spinner size="lg" />
+        </div>
+      </Card>
     );
   }
 
+  // Error State
   if (error) {
     return (
-      <div className="detail-section">
-        <h3>Rounds History</h3>
-        <div style={{ textAlign: 'center', padding: '20px', color: 'var(--error)' }}>
-          <div style={{ marginBottom: '8px' }}>Error loading rounds</div>
-          <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{error}</div>
-          <button className="btn-secondary" onClick={loadRounds} style={{ marginTop: '12px' }}>
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Rounds History</h2>}>
+        <div className="text-center py-8 space-y-4">
+          <div className="text-status-error text-4xl">⚠️</div>
+          <div>
+            <p className="text-text-primary font-semibold mb-2">Error loading rounds</p>
+            <p className="text-text-secondary text-sm">{error}</p>
+          </div>
+          <Button variant="secondary" onClick={loadRounds}>
             Retry
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     );
   }
 
+  // Empty State
   if (rounds.length === 0) {
     return (
-      <div className="detail-section">
-        <h3>Rounds History</h3>
-        <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>
-          No rounds yet. Start the auction to begin rounds.
-        </p>
-      </div>
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Rounds History</h2>}>
+        <div className="text-center py-8">
+          <p className="text-text-secondary">No rounds yet. Start the auction to begin rounds.</p>
+        </div>
+      </Card>
     );
   }
 
   return (
-    <div className="detail-section">
-      <h3>Rounds History</h3>
-      <div className="round-timeline">
+    <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Rounds History</h2>}>
+      <div className="space-y-4">
         {rounds.map((round, index) => {
           const isActive = round.roundIndex === currentRound && !round.closed;
           const isClosed = round.closed;
@@ -81,112 +118,119 @@ const RoundsHistory = ({ auctionId, currentRound }) => {
           return (
             <div
               key={round.id}
-              className={`round-item-timeline ${isClosed ? 'closed' : ''} ${isActive ? 'active' : ''}`}
+              className={`p-5 rounded-lg border transition-all duration-fast ${
+                isActive
+                  ? 'bg-accent-primary/10 border-accent-primary/30'
+                  : isClosed
+                  ? 'bg-status-success/5 border-status-success/20'
+                  : 'bg-bg-card border-border'
+              }`}
             >
-              <div
-                style={{
-                  background: isActive
-                    ? 'rgba(99, 102, 241, 0.1)'
-                    : isClosed
-                    ? 'rgba(16, 185, 129, 0.05)'
-                    : 'rgba(30, 41, 59, 0.6)',
-                  border: `1px solid ${
-                    isActive
-                      ? 'var(--accent-primary)'
-                      : isClosed
-                      ? 'var(--success)'
-                      : 'rgba(255, 255, 255, 0.1)'
-                  }`,
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                  <div>
-                    <h4 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>
+              {/* Round Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold text-text-primary">
                       Round {round.roundIndex + 1}
-                    </h4>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {formatDateTime(round.startedAt)} - {formatDateTime(round.endsAt)}
-                    </div>
-                  </div>
-                  <div>
+                    </h3>
                     {isActive && (
-                      <span className="badge badge-primary">Active</span>
+                      <Tooltip content="This round is currently active">
+                        <Badge variant="success" size="sm">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 bg-status-success rounded-full animate-pulse"></span>
+                            Active
+                          </span>
+                        </Badge>
+                      </Tooltip>
                     )}
                     {isClosed && (
-                      <span className="badge badge-success">Closed</span>
+                      <Tooltip content="This round has been closed">
+                        <Badge variant="success" size="sm">Closed</Badge>
+                      </Tooltip>
                     )}
                     {!isActive && !isClosed && (
-                      <span className="badge" style={{ background: 'rgba(107, 114, 128, 0.2)', color: '#9ca3af' }}>
-                        Pending
-                      </span>
+                      <Tooltip content="This round is pending">
+                        <Badge variant="default" size="sm">Pending</Badge>
+                      </Tooltip>
                     )}
                   </div>
+                  <div className="text-sm text-text-muted">
+                    <Tooltip content={`Started: ${formatDateTime(round.startedAt)}`}>
+                      <span>{formatDateTime(round.startedAt)}</span>
+                    </Tooltip>
+                    {' - '}
+                    <Tooltip content={`Ends: ${formatDateTime(round.endsAt)}`}>
+                      <span>{formatDateTime(round.endsAt)}</span>
+                    </Tooltip>
+                  </div>
                 </div>
+              </div>
 
-                {isClosed && round.winners && round.winners.length > 0 && (
-                  <div style={{ marginTop: '16px' }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-secondary)' }}>
-                      Winners ({round.winners.length}):
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {round.winners.map((winner, winnerIndex) => {
-                        const isCarryOver = winner.placedInRound != null && winner.placedInRound < round.roundIndex;
-                        return (
-                          <div
-                            key={winner.userId}
-                            style={{
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              border: '1px solid rgba(16, 185, 129, 0.3)',
-                              borderRadius: '8px',
-                              padding: '12px',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontWeight: '600', fontSize: '14px' }}>
+              {/* Winners */}
+              {isClosed && round.winners && round.winners.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
+                      Winners ({round.winners.length})
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
+                    {round.winners.map((winner, winnerIndex) => {
+                      const isCarryOver = winner.placedInRound != null && winner.placedInRound < round.roundIndex;
+                      return (
+                        <div
+                          key={winner.userId}
+                          className="flex items-center justify-between p-3 bg-status-success/10 border border-status-success/30 rounded-lg"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-text-primary">
                                 #{winnerIndex + 1} - {winner.username}
-                              </div>
-                              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                                Won at {formatDateTime(winner.wonAt)}
-                              </div>
+                              </span>
                               {isCarryOver && (
-                                <div style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '4px' }}>
-                                  from Round {winner.placedInRound + 1} (carried over)
-                                </div>
+                                <Tooltip content={`Bid was placed in Round ${winner.placedInRound + 1} and carried over`}>
+                                  <Badge variant="warning" size="sm">
+                                    Round {winner.placedInRound + 1}
+                                  </Badge>
+                                </Tooltip>
                               )}
                             </div>
-                            <div style={{ fontSize: '18px', fontWeight: '700', color: 'var(--success)' }}>
-                              {winner.bidAmount.toFixed(2)}
+                            <div className="text-xs text-text-muted">
+                              <Tooltip content={formatDateTime(winner.wonAt)}>
+                                Won at {formatDateTime(winner.wonAt)}
+                              </Tooltip>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                          <div className="text-lg font-bold text-status-success ml-4">
+                            {winner.bidAmount.toFixed(2)}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+              )}
 
-                {isClosed && (!round.winners || round.winners.length === 0) && (
-                  <div style={{ marginTop: '12px', color: 'var(--text-muted)', fontSize: '14px' }}>
-                    No winners in this round
-                  </div>
-                )}
+              {/* No Winners */}
+              {isClosed && (!round.winners || round.winners.length === 0) && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-text-muted text-sm text-center py-2">No winners in this round</p>
+                </div>
+              )}
 
-                {isActive && (
-                  <div style={{ marginTop: '12px', color: 'var(--accent-secondary)', fontSize: '14px', fontWeight: '500' }}>
+              {/* Active Round Indicator */}
+              {isActive && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-accent-primary text-sm font-medium text-center">
                     Round in progress...
-                  </div>
-                )}
-              </div>
+                  </p>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 };
 

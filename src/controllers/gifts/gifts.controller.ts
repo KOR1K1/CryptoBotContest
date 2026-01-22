@@ -7,14 +7,16 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SkipThrottle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { Gift, GiftDocument } from '../../models/gift.schema';
 import { CreateGiftDto } from '../../dto/create-gift.dto';
 import { ParseMongoIdPipe } from '../../common/pipes/mongo-id.pipe';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
 /**
  * GiftsController
@@ -36,9 +38,12 @@ export class GiftsController {
    * @returns Created gift
    */
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new gift', description: 'Creates a new gift that can be used in auctions' })
+  @ApiOperation({ summary: 'Create a new gift', description: 'Creates a new gift that can be used in auctions. Requires authentication.' })
   @ApiResponse({ status: 201, description: 'Gift created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   async createGift(@Body() dto: CreateGiftDto) {
     const gift = await this.giftModel.create({

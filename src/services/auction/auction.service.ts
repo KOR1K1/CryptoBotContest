@@ -27,6 +27,7 @@ export interface CreateAuctionDto {
   totalRounds: number;
   roundDurationMs: number;
   minBid: number;
+  createdBy: string; // User ID who creates the auction
 }
 
 export interface WinnerResult {
@@ -71,7 +72,7 @@ export class AuctionService {
    * @returns Created auction document
    */
   async createAuction(dto: CreateAuctionDto): Promise<AuctionDocument> {
-    const { giftId, totalGifts, totalRounds, roundDurationMs, minBid } = dto;
+    const { giftId, totalGifts, totalRounds, roundDurationMs, minBid, createdBy } = dto;
 
     // Validate parameters
     if (totalGifts <= 0 || totalRounds <= 0) {
@@ -90,6 +91,10 @@ export class AuctionService {
       throw new BadRequestException('minBid must be positive');
     }
 
+    if (!createdBy) {
+      throw new BadRequestException('createdBy is required');
+    }
+
     const auction = await this.auctionModel.create({
       giftId,
       status: AuctionStatus.CREATED,
@@ -98,9 +103,10 @@ export class AuctionService {
       currentRound: 0,
       roundDurationMs,
       minBid,
+      createdBy,
     });
 
-    this.logger.log(`Created auction ${auction._id} with ${totalRounds} rounds`);
+    this.logger.log(`Created auction ${auction._id} with ${totalRounds} rounds by user ${createdBy}`);
 
     return auction;
   }
@@ -108,11 +114,13 @@ export class AuctionService {
   /**
    * Start an auction
    * Creates the first round and transitions auction to RUNNING status
+   * Only the creator of the auction can start it
    *
    * @param auctionId Auction ID
+   * @param userId User ID attempting to start the auction (must be the creator)
    * @returns Started auction document
    */
-  async startAuction(auctionId: string): Promise<AuctionDocument> {
+  async startAuction(auctionId: string, userId: string): Promise<AuctionDocument> {
     const session = await this.connection.startSession();
 
     try {
@@ -127,6 +135,13 @@ export class AuctionService {
 
         if (!auction) {
           throw new NotFoundException(`Auction ${auctionId} not found`);
+        }
+
+        // Check if user is the creator
+        if (auction.createdBy.toString() !== userId) {
+          throw new BadRequestException(
+            'Only the creator of the auction can start it',
+          );
         }
 
         if (auction.status !== AuctionStatus.CREATED) {

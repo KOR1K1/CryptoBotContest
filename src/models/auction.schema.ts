@@ -80,6 +80,13 @@ export class Auction {
   @Prop()
   endsAt?: Date;
 
+  /**
+   * User ID who created this auction
+   * Only the creator can start the auction
+   */
+  @Prop({ required: true, type: 'ObjectId', ref: 'User' })
+  createdBy!: string;
+
   @Prop({ default: Date.now })
   createdAt!: Date;
 
@@ -94,6 +101,7 @@ AuctionSchema.index({ giftId: 1 });
 AuctionSchema.index({ status: 1 });
 AuctionSchema.index({ status: 1, currentRound: 1 });
 AuctionSchema.index({ endsAt: 1 }); // For scheduler queries
+AuctionSchema.index({ createdBy: 1 }); // For creator queries
 
 // Validation: ensure auction invariants
 AuctionSchema.pre('save', function (next) {

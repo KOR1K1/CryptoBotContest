@@ -133,23 +133,23 @@ describe('Concurrent Bids Integration Test', () => {
       },
     });
 
-    // Create and start auction
+    // Create and start auction (use first user as creator)
     auction = await auctionService.createAuction({
       giftId: gift._id.toString(),
       totalGifts: 5,
       totalRounds: 1,
       roundDurationMs: 60000, // 60 seconds
       minBid: 100,
+      createdBy: users[0]._id.toString(),
     });
 
-    await auctionService.startAuction(auction._id.toString());
+    await auctionService.startAuction(auction._id.toString(), users[0]._id.toString());
   });
 
   it('should handle concurrent bids from multiple users', async () => {
     const currentRound = 0;
     const concurrentBids = users.map((user, index) =>
-      bidService.placeBid({
-        userId: user._id.toString(),
+      bidService.placeBid(user._id.toString(), {
         auctionId: auction._id.toString(),
         amount: BID_AMOUNT + index * 100, // Different amounts
         currentRound,
@@ -196,16 +196,14 @@ describe('Concurrent Bids Integration Test', () => {
     const secondBidAmount = 1500;
 
     // First bid
-    await bidService.placeBid({
-      userId: user._id.toString(),
+    await bidService.placeBid(user._id.toString(), {
       auctionId: auction._id.toString(),
       amount: firstBidAmount,
       currentRound: 0,
     });
 
     // Second bid from same user (should update existing bid)
-    await bidService.placeBid({
-      userId: user._id.toString(),
+    await bidService.placeBid(user._id.toString(), {
       auctionId: auction._id.toString(),
       amount: secondBidAmount,
       currentRound: 0,
@@ -234,8 +232,7 @@ describe('Concurrent Bids Integration Test', () => {
 
   it('should maintain balance invariants under concurrent load', async () => {
     const concurrentBids = users.map((user, index) =>
-      bidService.placeBid({
-        userId: user._id.toString(),
+      bidService.placeBid(user._id.toString(), {
         auctionId: auction._id.toString(),
         amount: BID_AMOUNT + index * 50,
         currentRound: 0,
@@ -274,8 +271,7 @@ describe('Concurrent Bids Integration Test', () => {
     // Use increasing amounts to avoid race condition where one transaction
     // completes with higher amount before another with lower amount
     const concurrentBids = Array.from({ length: 5 }, (_, index) =>
-      bidService.placeBid({
-        userId: user._id.toString(),
+      bidService.placeBid(user._id.toString(), {
         auctionId: auction._id.toString(),
         amount: bidAmount + index * 10, // Increasing amounts: 1000, 1010, 1020, 1030, 1040
         currentRound: 0,
@@ -333,8 +329,7 @@ describe('Concurrent Bids Integration Test', () => {
     // Concurrent bids - some should fail (insufficient balance)
     const bidPromises = users.map((user, index) =>
       bidService
-        .placeBid({
-          userId: user._id.toString(),
+        .placeBid(user._id.toString(), {
           auctionId: auction._id.toString(),
           amount: BID_AMOUNT,
           currentRound: 0,

@@ -246,7 +246,8 @@ describe('BidService', () => {
         exec: jest.fn().mockResolvedValue(mockBid),
       });
 
-      const result = await service.placeBid(dto);
+      const { userId, ...bidDto } = dto;
+      const result = await service.placeBid(userId, bidDto);
 
       expect(bidModel.findOne).toHaveBeenCalled();
       expect(balanceService.validateBalance).toHaveBeenCalledWith('user123', 150);
@@ -303,7 +304,8 @@ describe('BidService', () => {
         exec: jest.fn().mockResolvedValue(updatedBid),
       });
 
-      const result = await service.placeBid(dto);
+      const { userId, ...bidDto } = dto;
+      const result = await service.placeBid(userId, bidDto);
 
       expect(balanceService.validateBalance).toHaveBeenCalledWith('user123', 50); // Delta: 200 - 150
       expect(balanceService.lockFunds).toHaveBeenCalledWith(
@@ -337,7 +339,8 @@ describe('BidService', () => {
         exec: jest.fn().mockResolvedValue(existingBid),
       });
 
-      await expect(service.placeBid(dto)).rejects.toThrow(BadRequestException);
+      const { userId, ...bidDto } = dto;
+      await expect(service.placeBid(userId, bidDto)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException when user has insufficient balance', async () => {
@@ -357,7 +360,8 @@ describe('BidService', () => {
 
       balanceService.validateBalance.mockResolvedValue(false);
 
-      await expect(service.placeBid(dto)).rejects.toThrow(BadRequestException);
+      const { userId, ...bidDto } = dto;
+      await expect(service.placeBid(userId, bidDto)).rejects.toThrow(BadRequestException);
     });
   });
 });

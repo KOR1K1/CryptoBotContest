@@ -417,7 +417,7 @@ export class RoundSchedulerService implements OnModuleInit {
         }, `Finalizing auction ${auctionId} (${reason})...`);
         
         const finalizeStartTime = new Date();
-        await this.auctionService.finalizeAuction(auctionId);
+        const finalizedAuction = await this.auctionService.finalizeAuction(auctionId);
         
         this.logger.log({
           action: 'finalize-auction-success',
@@ -425,6 +425,30 @@ export class RoundSchedulerService implements OnModuleInit {
           lastRoundIndex: roundIndex,
           durationMs: new Date().getTime() - finalizeStartTime.getTime(),
         }, `Auction ${auctionId} finalized successfully`);
+
+        // Invalidate dashboard cache (auction status changed to COMPLETED)
+        await this.invalidateDashboardCache(auctionId);
+
+        // Small delay to ensure cache invalidation is processed
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // Emit WebSocket event for auction completion with full auction data
+        const fullAuction = await this.auctionService.getAuctionById(auctionId);
+        this.auctionsGateway.emitAuctionUpdate(auctionId, {
+          id: fullAuction._id.toString(),
+          status: fullAuction.status,
+          currentRound: fullAuction.currentRound,
+          totalRounds: fullAuction.totalRounds,
+          giftId: fullAuction.giftId?.toString(),
+          totalGifts: fullAuction.totalGifts,
+          minBid: fullAuction.minBid,
+          startedAt: fullAuction.startedAt,
+          endsAt: fullAuction.endsAt,
+          createdAt: fullAuction.createdAt,
+        });
+        this.auctionsGateway.emitAuctionsListUpdate();
+        
+        this.logger.log(`Auction ${auctionId} finalized and WebSocket events emitted`);
       } else {
         // Advance to next round
         this.logger.log({
@@ -618,12 +642,31 @@ export class RoundSchedulerService implements OnModuleInit {
             }, `Auction ${auctionId} has awarded all ${totalAwarded}/${auction.totalGifts} gifts but is still RUNNING. Finalizing...`);
 
             try {
-              await this.auctionService.finalizeAuction(auctionId);
+              const finalizedAuction = await this.auctionService.finalizeAuction(auctionId);
               finalizedCount++;
               this.logger.log({
                 action: 'recovery-finalize-success',
                 auctionId,
               }, `Successfully finalized auction ${auctionId} (all gifts awarded)`);
+              
+              // Invalidate dashboard cache
+              await this.invalidateDashboardCache(auctionId);
+              
+              // Emit WebSocket event with full auction data
+              const fullAuction = await this.auctionService.getAuctionById(auctionId);
+              this.auctionsGateway.emitAuctionUpdate(auctionId, {
+                id: fullAuction._id.toString(),
+                status: fullAuction.status,
+                currentRound: fullAuction.currentRound,
+                totalRounds: fullAuction.totalRounds,
+                giftId: fullAuction.giftId?.toString(),
+                totalGifts: fullAuction.totalGifts,
+                minBid: fullAuction.minBid,
+                startedAt: fullAuction.startedAt,
+                endsAt: fullAuction.endsAt,
+                createdAt: fullAuction.createdAt,
+              });
+              this.auctionsGateway.emitAuctionsListUpdate();
             } catch (error) {
               this.logger.error({
                 action: 'recovery-finalize-error',
@@ -648,12 +691,31 @@ export class RoundSchedulerService implements OnModuleInit {
             }, `Auction ${auctionId} has closed last round but is still RUNNING. Finalizing...`);
 
             try {
-              await this.auctionService.finalizeAuction(auctionId);
+              const finalizedAuction = await this.auctionService.finalizeAuction(auctionId);
               finalizedCount++;
               this.logger.log({
                 action: 'recovery-finalize-success',
                 auctionId,
               }, `Successfully finalized stuck auction ${auctionId}`);
+              
+              // Invalidate dashboard cache
+              await this.invalidateDashboardCache(auctionId);
+              
+              // Emit WebSocket event with full auction data
+              const fullAuction = await this.auctionService.getAuctionById(auctionId);
+              this.auctionsGateway.emitAuctionUpdate(auctionId, {
+                id: fullAuction._id.toString(),
+                status: fullAuction.status,
+                currentRound: fullAuction.currentRound,
+                totalRounds: fullAuction.totalRounds,
+                giftId: fullAuction.giftId?.toString(),
+                totalGifts: fullAuction.totalGifts,
+                minBid: fullAuction.minBid,
+                startedAt: fullAuction.startedAt,
+                endsAt: fullAuction.endsAt,
+                createdAt: fullAuction.createdAt,
+              });
+              this.auctionsGateway.emitAuctionsListUpdate();
             } catch (error) {
               this.logger.error({
                 action: 'recovery-finalize-error',
@@ -731,12 +793,31 @@ export class RoundSchedulerService implements OnModuleInit {
             }, `Auction ${auctionId} has been in FINALIZING state for ${Math.floor(timeInFinalizing / 1000)}s. Attempting to complete...`);
 
             try {
-              await this.auctionService.finalizeAuction(auctionId);
+              const finalizedAuction = await this.auctionService.finalizeAuction(auctionId);
               finalizedCount++;
               this.logger.log({
                 action: 'recovery-complete-success',
                 auctionId,
               }, `Successfully completed stuck FINALIZING auction ${auctionId}`);
+              
+              // Invalidate dashboard cache
+              await this.invalidateDashboardCache(auctionId);
+              
+              // Emit WebSocket event with full auction data
+              const fullAuction = await this.auctionService.getAuctionById(auctionId);
+              this.auctionsGateway.emitAuctionUpdate(auctionId, {
+                id: fullAuction._id.toString(),
+                status: fullAuction.status,
+                currentRound: fullAuction.currentRound,
+                totalRounds: fullAuction.totalRounds,
+                giftId: fullAuction.giftId?.toString(),
+                totalGifts: fullAuction.totalGifts,
+                minBid: fullAuction.minBid,
+                startedAt: fullAuction.startedAt,
+                endsAt: fullAuction.endsAt,
+                createdAt: fullAuction.createdAt,
+              });
+              this.auctionsGateway.emitAuctionsListUpdate();
             } catch (error) {
               this.logger.error({
                 action: 'recovery-complete-error',
@@ -773,7 +854,7 @@ export class RoundSchedulerService implements OnModuleInit {
 
   /**
    * Invalidate dashboard cache for an auction
-   * Called when round closures occur
+   * Called when round closures occur or auction finalizes
    * 
    * @param auctionId Auction ID
    */
@@ -788,9 +869,12 @@ export class RoundSchedulerService implements OnModuleInit {
       // Delete common cache key (dashboard:auctionId:all)
       await this.cacheManager.del(`dashboard:${auctionId}:all`);
       
-      // Note: For user-specific cache keys, we rely on TTL expiration
-      // (cache expires in 1-5 seconds anyway, so stale data is acceptable for a short period)
-      // For production, could implement pattern-based deletion using Redis directly
+      // Try to get Redis client from cache manager to delete pattern-based keys
+      // This is a workaround - cache-manager doesn't support pattern deletion directly
+      // For now, we rely on TTL expiration for user-specific keys
+      // The cache TTL is very short (1-5 seconds), so stale data is acceptable for a brief period
+      
+      this.logger.debug(`Invalidated dashboard cache for auction ${auctionId}`);
     } catch (error) {
       // Log error but don't fail the request (cache invalidation is not critical)
       this.logger.error(`Error invalidating dashboard cache for auction ${auctionId}:`, error);

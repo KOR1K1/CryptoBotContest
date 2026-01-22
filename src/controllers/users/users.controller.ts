@@ -8,11 +8,13 @@ import {
   HttpStatus,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
+  UseGuards,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { SkipThrottle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { User, UserDocument } from '../../models/user.schema';
 import { Auction, AuctionDocument } from '../../models/auction.schema';
 import { Gift, GiftDocument } from '../../models/gift.schema';
@@ -22,6 +24,8 @@ import { BidService } from '../../services/bid/bid.service';
 import { Bid, BidDocument } from '../../models/bid.schema';
 import { BidStatus } from '../../common/enums/bid-status.enum';
 import { ParseMongoIdPipe } from '../../common/pipes/mongo-id.pipe';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 
 /**
  * UsersController
@@ -131,12 +135,24 @@ export class UsersController {
    * @returns User balance data
    */
   @Get(':id/balance')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
-  @ApiOperation({ summary: 'Get user balance', description: 'Returns user balance, locked balance, and validates invariants' })
+  @ApiOperation({ summary: 'Get user balance', description: 'Returns user balance, locked balance, and validates invariants. Requires authentication and access to own account.' })
   @ApiParam({ name: 'id', description: 'User ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Balance retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot access other user\'s balance' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async getUserBalance(@Param('id', ParseMongoIdPipe) id: string) {
+  async getUserBalance(
+    @Param('id', ParseMongoIdPipe) id: string,
+    @CurrentUser() currentUser: UserDocument,
+  ) {
+    // Check if user is accessing their own balance
+    if (currentUser._id.toString() !== id) {
+      throw new ForbiddenException('Cannot access other user\'s balance');
+    }
+
     const user = await this.userModel.findById(id).exec();
 
     if (!user) {
@@ -165,10 +181,21 @@ export class UsersController {
    * @returns Array of user's bids
    */
   @Get(':id/bids')
-  @ApiOperation({ summary: 'Get user bids', description: 'Returns all bids placed by the user across all auctions' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user bids', description: 'Returns all bids placed by the user across all auctions. Requires authentication and access to own account.' })
   @ApiParam({ name: 'id', description: 'User ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Bids retrieved successfully' })
-  async getUserBids(@Param('id', ParseMongoIdPipe) id: string) {
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot access other user\'s bids' })
+  async getUserBids(
+    @Param('id', ParseMongoIdPipe) id: string,
+    @CurrentUser() currentUser: UserDocument,
+  ) {
+    // Check if user is accessing their own bids
+    if (currentUser._id.toString() !== id) {
+      throw new ForbiddenException('Cannot access other user\'s bids');
+    }
     const bids = await this.bidService.getUserBids(id);
 
     return bids.map((b: BidDocument) => ({
@@ -194,11 +221,19 @@ export class UsersController {
    * @returns Added inventory item
    */
   @Post(':id/inventory/add')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
   async addGiftToInventory(
     @Param('id', ParseMongoIdPipe) id: string,
     @Body() body: { giftId: string; bidAmount?: number },
+    @CurrentUser() currentUser: UserDocument,
   ) {
+    // Check if user is accessing their own inventory
+    if (currentUser._id.toString() !== id) {
+      throw new ForbiddenException('Cannot add gifts to other user\'s inventory');
+    }
+
     const user = await this.userModel.findById(id).exec();
     if (!user) {
       throw new NotFoundException('User not found');
@@ -256,11 +291,22 @@ export class UsersController {
    * @returns Array of won gifts with gift details
    */
   @Get(':id/inventory')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
-  @ApiOperation({ summary: 'Get user inventory', description: 'Returns all gifts won by the user in auctions' })
+  @ApiOperation({ summary: 'Get user inventory', description: 'Returns all gifts won by the user in auctions. Requires authentication and access to own account.' })
   @ApiParam({ name: 'id', description: 'User ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Inventory retrieved successfully' })
-  async getUserInventory(@Param('id', ParseMongoIdPipe) id: string) {
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot access other user\'s inventory' })
+  async getUserInventory(
+    @Param('id', ParseMongoIdPipe) id: string,
+    @CurrentUser() currentUser: UserDocument,
+  ) {
+    // Check if user is accessing their own inventory
+    if (currentUser._id.toString() !== id) {
+      throw new ForbiddenException('Cannot access other user\'s inventory');
+    }
     const { Auction, Gift } = await import('../../models');
     const auctionModel = this.userModel.db.model('Auction');
     const giftModel = this.userModel.db.model('Gift');

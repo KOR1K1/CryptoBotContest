@@ -11,13 +11,15 @@ import {
   BadRequestException,
   Inject,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { CreateAuctionDto } from '../../dto/create-auction.dto';
 import { PlaceBidDto } from '../../dto/place-bid.dto';
+import { PlaceBidBotDto } from '../../dto/place-bid-bot.dto';
 import { AuctionService } from '../../services/auction/auction.service';
 import { BidService } from '../../services/bid/bid.service';
 import { InjectModel } from '@nestjs/mongoose';
@@ -28,6 +30,9 @@ import { BidStatus } from '../../common/enums/bid-status.enum';
 import { ParseMongoIdPipe } from '../../common/pipes/mongo-id.pipe';
 import { AuctionsGateway } from '../../gateways/auctions.gateway';
 import { ConfigService } from '@nestjs/config';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { UserDocument } from '../../models/user.schema';
 
 /**
  * AuctionsController
@@ -74,6 +79,7 @@ export class AuctionsController {
       startedAt: auction.startedAt,
       endsAt: auction.endsAt,
       createdAt: auction.createdAt,
+      createdBy: auction.createdBy?.toString(),
     }));
   }
 
@@ -85,12 +91,18 @@ export class AuctionsController {
    * @returns Created auction
    */
   @Post()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new auction', description: 'Creates a new auction for the specified gift' })
+  @ApiOperation({ summary: 'Create a new auction', description: 'Creates a new auction for the specified gift. Requires authentication.' })
   @ApiResponse({ status: 201, description: 'Auction created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Gift not found' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
-  async createAuction(@Body() dto: CreateAuctionDto) {
+  async createAuction(
+    @Body() dto: CreateAuctionDto,
+    @CurrentUser() user: UserDocument,
+  ) {
     // Verify gift exists
     const gift = await this.giftModel.findById(dto.giftId).exec();
     if (!gift) {
@@ -103,7 +115,11 @@ export class AuctionsController {
       totalRounds: dto.totalRounds,
       roundDurationMs: dto.roundDurationMs,
       minBid: dto.minBid,
+      createdBy: user._id.toString(),
     });
+
+    // Emit WebSocket update to notify all clients about new auction
+    this.auctionsGateway.emitAuctionsListUpdate();
 
     return {
       id: auction._id,
@@ -126,14 +142,20 @@ export class AuctionsController {
    * @returns Started auction
    */
   @Post(':id/start')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Start an auction', description: 'Starts the auction, creating the first round and transitioning status to RUNNING' })
+  @ApiOperation({ summary: 'Start an auction', description: 'Starts the auction, creating the first round and transitioning status to RUNNING. Requires authentication.' })
   @ApiParam({ name: 'id', description: 'Auction ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Auction started successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Auction not found' })
   @ApiResponse({ status: 400, description: 'Auction cannot be started (wrong status)' })
-  async startAuction(@Param('id', ParseMongoIdPipe) id: string) {
-    const auction = await this.auctionService.startAuction(id);
+  async startAuction(
+    @Param('id', ParseMongoIdPipe) id: string,
+    @CurrentUser() user: UserDocument,
+  ) {
+    const auction = await this.auctionService.startAuction(id, user._id.toString());
     
     // Emit WebSocket update
     this.auctionsGateway.emitAuctionUpdate(id, auction);
@@ -165,9 +187,11 @@ export class AuctionsController {
    *
    * No rate limiting: This endpoint is specifically for bot simulation and testing.
    * Allows unlimited bids for testing purposes (load testing, stress testing, etc.)
+   * 
+   * Note: userId is accepted in body for bot simulation (no JWT required)
    *
    * @param id Auction ID
-   * @param dto PlaceBidDto
+   * @param dto PlaceBidBotDto (with userId in body)
    * @returns Created/updated bid
    */
   @Post(':id/bids/bot')
@@ -175,7 +199,7 @@ export class AuctionsController {
   @SkipThrottle() // Skip rate limiting for bot simulation endpoint
   @ApiOperation({ 
     summary: 'Place a bid (bot simulation)', 
-    description: 'Places or updates a bid in the auction. Special endpoint without rate limits for bot simulation and testing. If user already has an active bid, amount must be higher than current bid.' 
+    description: 'Places or updates a bid in the auction. Special endpoint without rate limits for bot simulation and testing. userId is accepted in request body (no JWT required). If user already has an active bid, amount must be higher than current bid.' 
   })
   @ApiParam({ name: 'id', description: 'Auction ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 201, description: 'Bid placed successfully' })
@@ -183,10 +207,44 @@ export class AuctionsController {
   @ApiResponse({ status: 404, description: 'Auction not found' })
   async placeBidBot(
     @Param('id', ParseMongoIdPipe) id: string,
-    @Body() dto: PlaceBidDto,
+    @Body() dto: PlaceBidBotDto,
   ) {
-    // Reuse the same logic as placeBid
-    return this.placeBid(id, dto);
+    // Get current round from auction
+    const auction = await this.auctionService.getAuctionById(id);
+    const currentRoundData = await this.auctionService.getCurrentRound(id);
+
+    if (!currentRoundData) {
+      throw new BadRequestException('Auction has no active round');
+    }
+
+    // For bots: userId comes from body
+    const bid = await this.bidService.placeBid(
+      dto.userId,
+      {
+        auctionId: id,
+        amount: dto.amount,
+        currentRound: auction.currentRound,
+      },
+    );
+
+    const bidResponse = {
+      id: bid._id,
+      userId: bid.userId,
+      auctionId: bid.auctionId,
+      amount: bid.amount,
+      status: bid.status,
+      roundIndex: bid.roundIndex,
+      createdAt: bid.createdAt,
+    };
+
+    // Invalidate cache for this auction (bid update changes dashboard data)
+    await this.invalidateDashboardCache(id);
+
+    // Emit WebSocket update
+    this.auctionsGateway.emitBidUpdate(id, bidResponse);
+    this.auctionsGateway.emitAuctionsListUpdate();
+
+    return bidResponse;
   }
 
   /**
@@ -209,13 +267,17 @@ export class AuctionsController {
     description: 'Places or updates a bid in the auction. If user already has an active bid, amount must be higher than current bid.' 
   })
   @ApiParam({ name: 'id', description: 'Auction ID', example: '507f1f77bcf86cd799439011' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiResponse({ status: 201, description: 'Bid placed successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 400, description: 'Invalid bid (insufficient balance, bid too low, etc.)' })
   @ApiResponse({ status: 404, description: 'Auction not found' })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async placeBid(
     @Param('id', ParseMongoIdPipe) id: string,
     @Body() dto: PlaceBidDto,
+    @CurrentUser() user: UserDocument,
   ) {
     // Get current round from auction
     const auction = await this.auctionService.getAuctionById(id);
@@ -225,12 +287,14 @@ export class AuctionsController {
       throw new BadRequestException('Auction has no active round');
     }
 
-    const bid = await this.bidService.placeBid({
-      userId: dto.userId,
+    const bid = await this.bidService.placeBid(
+      user._id.toString(),
+      {
       auctionId: id,
       amount: dto.amount,
       currentRound: auction.currentRound,
-    });
+      },
+    );
 
     const bidResponse = {
       id: bid._id,
@@ -485,6 +549,7 @@ export class AuctionsController {
         totalRounds: auction.totalRounds,
         currentRound: auction.currentRound,
         minBid: auction.minBid,
+        createdBy: auction.createdBy?.toString(),
       },
       currentRound: currentRound
         ? {
@@ -555,6 +620,7 @@ export class AuctionsController {
       startedAt: auction.startedAt,
       endsAt: auction.endsAt,
       createdAt: auction.createdAt,
+      createdBy: auction.createdBy?.toString(),
       currentRoundData: currentRound
         ? {
             roundIndex: currentRound.roundIndex,

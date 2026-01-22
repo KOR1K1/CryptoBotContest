@@ -1,27 +1,52 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 import RoundsHistory from '../components/RoundsHistory';
-import { showToast } from '../components/Toast';
-import CircularProgress from '../components/CircularProgress';
+import { showToast } from '../components/ui/Toast';
+import BidForm from '../components/forms/BidForm';
+import BidItem from '../components/features/BidItem';
+import TimerDisplay from '../components/features/TimerDisplay';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import Loading from '../components/ui/Loading';
+import Tooltip from '../components/ui/Tooltip';
+import EmptyState from '../components/ui/EmptyState';
 
-const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
+/**
+ * AuctionDetailPage Component
+ * 
+ * Страница детального просмотра аукциона с улучшенным дизайном
+ */
+const AuctionDetailPage = () => {
+  const { id: auctionId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const [dashboardData, setDashboardData] = useState(null);
   const [giftInfo, setGiftInfo] = useState({});
   const [loading, setLoading] = useState(true);
-  const [bidAmount, setBidAmount] = useState('');
-  const [bidResult, setBidResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [bidLoading, setBidLoading] = useState(false);
+  const [bidError, setBidError] = useState(null);
+  const [bidSuccess, setBidSuccess] = useState(null);
   const [timeUntilRoundEnd, setTimeUntilRoundEnd] = useState(0);
   const [totalTimeRemaining, setTotalTimeRemaining] = useState(0);
+  const [roundProgress, setRoundProgress] = useState(0);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (forceRefresh = false) => {
     if (!auctionId) {
       setLoading(false);
       return;
     }
 
     try {
+      setError(null);
       // Use new optimized dashboard endpoint
-      const url = `/auctions/${auctionId}/dashboard${currentUserId ? `?userId=${currentUserId}` : ''}`;
+      // Add timestamp to bypass cache if force refresh
+      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
+      const url = `/auctions/${auctionId}/dashboard${currentUserId ? `?userId=${currentUserId}${cacheBuster}` : cacheBuster ? `?${cacheBuster.substring(1)}` : ''}`;
       const data = await apiRequest(url);
       setDashboardData(data);
 
@@ -35,19 +60,9 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
         console.error('Error loading gift:', error);
         setGiftInfo({});
       }
-
-      // Set initial bid amount
-      if (data.auction.minBid) {
-        const maxBid = data.topBids && data.topBids.length > 0 
-          ? Math.max(...data.topBids.map(b => b.amount))
-          : 0;
-        const minBidToPlace = maxBid > 0 
-          ? Math.max(data.auction.minBid, maxBid + 1) 
-          : data.auction.minBid;
-        setBidAmount(minBidToPlace.toFixed(2));
-      }
     } catch (error) {
       console.error('Error loading dashboard:', error);
+      setError(error.message || 'Failed to load auction');
       showToast(`Failed to load auction: ${error.message}`, 'error');
       setDashboardData(null);
       setGiftInfo({});
@@ -60,18 +75,17 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
     loadDashboard();
 
     // Page Visibility API: Optimize polling based on tab visibility
-    // When tab is hidden or browser minimized: stop polling or increase interval significantly
-    // When tab is visible: resume normal polling
     let refreshInterval = null;
     
-    const ACTIVE_INTERVAL = 1000; // 1 second when tab is active (more reactive UI)
-    const INACTIVE_INTERVAL = 30000; // 30 seconds when tab is hidden (or disable completely)
+    const ACTIVE_INTERVAL = 1000; // 1 second when tab is active
     
     const startPolling = (interval) => {
       if (refreshInterval) {
         clearInterval(refreshInterval);
       }
-      refreshInterval = setInterval(loadDashboard, interval);
+      if (!document.hidden && document.visibilityState !== 'hidden') {
+        refreshInterval = setInterval(loadDashboard, interval);
+      }
     };
 
     const stopPolling = () => {
@@ -83,25 +97,20 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
 
     const handleVisibilityChange = () => {
       if (document.hidden || document.visibilityState === 'hidden') {
-        // Tab is hidden or browser minimized - STOP polling completely
         stopPolling();
       } else {
-        // Tab is visible again - resume normal polling
-        loadDashboard(); // Immediate refresh when tab becomes visible
+        loadDashboard();
         startPolling(ACTIVE_INTERVAL);
       }
     };
 
-    // Also handle window blur/focus events (for browser minimization)
     const handleWindowBlur = () => {
-      // Browser window lost focus (minimized or switched to another app)
       stopPolling();
     };
 
     const handleWindowFocus = () => {
-      // Browser window regained focus
       if (!document.hidden && document.visibilityState !== 'hidden') {
-        loadDashboard(); // Immediate refresh
+        loadDashboard();
         startPolling(ACTIVE_INTERVAL);
       }
     };
@@ -111,18 +120,19 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
       startPolling(ACTIVE_INTERVAL);
     }
 
-    // Listen for tab visibility changes
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Listen for window blur/focus (for browser minimization)
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
 
-    // Listen for refresh events from WebSocket (always active, regardless of tab visibility)
-    const handleRefresh = () => {
-      // Only refresh if tab is visible (to avoid unnecessary requests)
-      if (!document.hidden && document.visibilityState !== 'hidden') {
-        loadDashboard();
+    // Listen for refresh events from WebSocket
+    const handleRefresh = (event) => {
+      const forceRefresh = event?.detail?.force === true;
+      if (forceRefresh) {
+        setTimeout(() => {
+          loadDashboard(true);
+        }, 200);
+      } else {
+        loadDashboard(false);
       }
     };
 
@@ -131,12 +141,10 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
       if (!data || data.auctionId !== auctionId) return;
       if (!data.topPositions || !Array.isArray(data.topPositions)) return;
 
-      // Live-update only topBids for this auction to make UI more reactive
-      // Limit to top 3 (backend sends top-10 for significance check, but UI shows only 3)
       setDashboardData((prev) => {
         if (!prev) return prev;
         const mappedTop = data.topPositions
-          .slice(0, 3) // Only take top 3 for display
+          .slice(0, 3)
           .map((tp) => ({
             position: tp.position,
             userId: tp.userId,
@@ -174,22 +182,28 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
     if (!dashboardData?.currentRound) {
       setTimeUntilRoundEnd(0);
       setTotalTimeRemaining(0);
+      setRoundProgress(0);
       return;
     }
 
     let timerInterval = null;
 
     const updateTimers = () => {
-      // Only update timers if tab is visible (save resources when hidden)
       if (document.hidden || document.visibilityState === 'hidden') {
         return;
       }
 
       const now = Date.now();
+      const startedAt = new Date(dashboardData.currentRound.startedAt).getTime();
       const endsAt = new Date(dashboardData.currentRound.endsAt).getTime();
       const roundRemaining = Math.max(0, endsAt - now);
+      const totalDuration = endsAt - startedAt;
+      const elapsed = now - startedAt;
+      const progress = totalDuration > 0 ? Math.max(0, Math.min(100, (elapsed / totalDuration) * 100)) : 0;
+
       setTimeUntilRoundEnd(roundRemaining);
       setTotalTimeRemaining(dashboardData.currentRound.totalTimeRemainingMs || 0);
+      setRoundProgress(progress);
     };
 
     const stopTimers = () => {
@@ -202,17 +216,16 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
     const startTimers = () => {
       stopTimers();
       if (!document.hidden && document.visibilityState !== 'hidden') {
-        updateTimers(); // Immediate update
+        updateTimers();
         timerInterval = setInterval(updateTimers, 1000);
       }
     };
 
-    // Pause timers when tab is hidden or browser minimized, resume when visible
     const handleVisibilityChange = () => {
       if (document.hidden || document.visibilityState === 'hidden') {
         stopTimers();
       } else {
-        startTimers(); // Tab became visible - start timers
+        startTimers();
       }
     };
 
@@ -226,7 +239,6 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
       }
     };
 
-    // Start timers if tab is visible
     startTimers();
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -241,24 +253,6 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
     };
   }, [dashboardData?.currentRound]);
 
-  const formatTime = (ms) => {
-    if (ms <= 0) return '0s';
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) {
-      return `${days}d ${hours % 24}h ${minutes % 60}m`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  };
-
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
@@ -268,285 +262,284 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
     try {
       await apiRequest(`/auctions/${auctionId}/start`, { method: 'POST' });
       showToast('Auction started successfully!', 'success');
-      loadDashboard();
+      loadDashboard(true);
     } catch (error) {
       showToast(`Error starting auction: ${error.message}`, 'error');
     }
   };
 
-  const handlePlaceBid = async () => {
+  const handlePlaceBid = async (amount) => {
     if (!currentUserId) {
-      setBidResult({ type: 'error', message: 'Please select a user first' });
+      setBidError('Please login to place a bid');
       return;
     }
 
-    const amount = parseFloat(bidAmount);
-    if (!amount || amount <= 0) {
-      setBidResult({ type: 'error', message: 'Please enter a valid bid amount' });
-      return;
-    }
-
-    setBidResult({ type: 'loading', message: 'Placing bid...' });
+    setBidLoading(true);
+    setBidError(null);
+    setBidSuccess(null);
 
     try {
       await apiRequest(`/auctions/${auctionId}/bids`, {
         method: 'POST',
-        data: {
-          userId: currentUserId,
-          amount,
-        },
+        data: { amount },
       });
 
-      setBidResult({ type: 'success', message: 'Bid placed successfully!' });
+      setBidSuccess('Bid placed successfully!');
       showToast('Bid placed successfully!', 'success');
-      loadDashboard();
-      setTimeout(() => setBidResult(null), 3000);
+      loadDashboard(true);
+      setTimeout(() => {
+        setBidSuccess(null);
+      }, 3000);
     } catch (error) {
       const errorMessage = error.message || 'Failed to place bid';
-      setBidResult({ type: 'error', message: errorMessage });
+      setBidError(errorMessage);
       showToast(errorMessage, 'error');
+    } finally {
+      setBidLoading(false);
     }
   };
 
+  // Loading State
   if (loading) {
     return (
-      <div className="page active">
-        <div className="loading">Loading auction details...</div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Tooltip content="Return to auctions list">
+            <Button variant="ghost" onClick={() => navigate('/auctions')} leftIcon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            }>
+              Back to Auctions
+            </Button>
+          </Tooltip>
+        </div>
+        <Card variant="elevated" className="p-12 text-center">
+          <Loading.Spinner size="lg" />
+          <p className="text-text-secondary mt-4">Loading auction details...</p>
+        </Card>
       </div>
     );
   }
 
-  if (!dashboardData) {
+  // Error State
+  if (error && !dashboardData) {
     return (
-      <div className="page active">
-        <div className="error">Auction not found</div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Tooltip content="Return to auctions list">
+            <Button variant="ghost" onClick={() => navigate('/auctions')} leftIcon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            }>
+              Back to Auctions
+            </Button>
+          </Tooltip>
+        </div>
+        <Card variant="elevated" className="p-8 text-center">
+          <div className="space-y-4">
+            <div className="text-status-error text-6xl">⚠️</div>
+            <h2 className="text-2xl font-semibold text-text-primary">Auction Not Found</h2>
+            <p className="text-text-secondary">{error}</p>
+            <Tooltip content="Try loading the auction again">
+              <Button variant="primary" onClick={() => loadDashboard(true)}>
+                Retry
+              </Button>
+            </Tooltip>
+          </div>
+        </Card>
       </div>
     );
   }
+
+  if (!dashboardData) return null;
 
   const { auction, currentRound, gifts, topBids, userPosition } = dashboardData;
+  const currentMaxBid = topBids && topBids.length > 0 ? topBids[0].amount : null;
 
   return (
-    <div className="page active">
-      <div className="page-header">
-        <button className="btn-secondary" onClick={onBack}>
-          ← Back to Auctions
-        </button>
-        <button className="btn-primary" onClick={loadDashboard}>
-          Refresh
-        </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <Tooltip content="Return to auctions list">
+          <Button 
+            variant="ghost" 
+            onClick={() => navigate('/auctions')}
+            leftIcon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            }
+          >
+            Back to Auctions
+          </Button>
+        </Tooltip>
+        
+        <Tooltip content="Refresh auction data">
+          <Button 
+            variant="secondary" 
+            onClick={() => loadDashboard(true)}
+            leftIcon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            }
+          >
+            Refresh
+          </Button>
+        </Tooltip>
       </div>
 
-      <div className="auction-detail" style={{ maxWidth: '800px', margin: '0 auto' }}>
-        {/* Gift Image & Title */}
-        <div style={{
-          width: '100%',
-          maxWidth: '400px',
-          height: '300px',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          marginBottom: '24px',
-          background: 'var(--bg-secondary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          {giftInfo.imageUrl ? (
+      {/* Gift Image & Title */}
+      <Card variant="elevated" className="overflow-hidden">
+        <div className="relative w-full h-64 bg-bg-secondary overflow-hidden">
+          {giftInfo?.imageUrl ? (
             <img
               src={giftInfo.imageUrl}
-              alt={giftInfo.title || 'Gift'}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
+              alt={giftInfo.title || 'Auction gift'}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                const placeholder = e.target.parentElement.querySelector('.image-placeholder');
+                if (placeholder) placeholder.style.display = 'flex';
               }}
             />
-          ) : (
-            <div className="auction-card-image-placeholder" style={{ color: 'var(--text-muted)', fontSize: '14px' }}>No image</div>
-          )}
+          ) : null}
+          <div className="image-placeholder hidden w-full h-full items-center justify-center text-text-muted">
+            <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
         </div>
-        <h2>{giftInfo.title || 'Auction'}</h2>
-        {giftInfo.description && (
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-            {giftInfo.description}
-          </p>
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-text-primary mb-2">
+                {giftInfo?.title || 'Auction'}
+              </h1>
+              {giftInfo?.description && (
+                <p className="text-text-secondary">
+                  {giftInfo.description}
+                </p>
+              )}
+            </div>
+            <Badge 
+              variant={
+                auction.status === 'RUNNING' ? 'success' :
+                auction.status === 'COMPLETED' ? 'info' :
+                auction.status === 'FINALIZING' ? 'warning' : 'default'
+              }
+              size="md"
+            >
+              {auction.status}
+            </Badge>
+          </div>
+        </div>
+      </Card>
+
+      {/* Auction Information */}
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Auction Information</h2>}>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-text-muted">Time Started</span>
+            <span className="text-text-primary font-medium">
+              {currentRound?.startedAt ? formatDateTime(currentRound.startedAt) : 'N/A'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-text-muted">Time Ending</span>
+            <span className="text-text-primary font-medium">
+              {currentRound?.endsAt ? formatDateTime(currentRound.endsAt) : 'N/A'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-text-muted">Current Round</span>
+            <span className="text-text-primary font-medium">
+              {(auction.currentRound ?? 0) + 1} / {auction.totalRounds ?? 0}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-text-muted">Total Gifts</span>
+            <span className="text-text-primary font-medium">{gifts?.totalGifts ?? 0}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-text-muted">Already Awarded</span>
+            <span className="text-text-primary font-medium">{gifts?.alreadyAwarded ?? 0}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b border-border">
+            <span className="text-text-muted">Remaining Gifts</span>
+            <span className="text-status-success font-semibold">{gifts?.remainingGifts ?? 0}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-text-muted">Gifts Available This Round</span>
+            <Tooltip content="Maximum number of winners in this round">
+              <span className="text-status-success font-semibold text-lg">
+                {gifts?.giftsPerRound ?? 0}
+              </span>
+            </Tooltip>
+          </div>
+        </div>
+      </Card>
+
+      {/* Timer Display */}
+      {currentRound && (
+        <TimerDisplay
+          timeUntilRoundEnd={timeUntilRoundEnd}
+          totalTimeRemaining={totalTimeRemaining}
+          roundProgress={roundProgress}
+          minBid={auction.minBid || 0}
+        />
+      )}
+
+      {/* Top 3 Participants */}
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Top 3 Participants</h2>}>
+        {topBids && topBids.length > 0 ? (
+          <div className="space-y-3">
+            {topBids.map((bid, index) => (
+              <BidItem
+                key={bid.userId}
+                bid={bid}
+                position={index + 1}
+                currentRound={auction.currentRound}
+                isLeading={index === 0}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon="🎯"
+            title="No Bids Yet"
+            message="Be the first to place a bid! Your bid will appear here once you participate."
+            className="py-8"
+          />
         )}
-        <span className={`status ${auction.status.toLowerCase()}`}>{auction.status}</span>
+      </Card>
 
-        {/* Auction Info Table (Vertical Layout) */}
-        <div className="detail-section" style={{ marginTop: '32px' }}>
-          <h3>Auction Information</h3>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            background: 'var(--bg-card)',
-            borderRadius: '12px',
-            border: '1px solid var(--border)',
-            overflow: 'hidden',
-          }}>
-            <div className="info" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <strong>Time Started:</strong> {currentRound?.startedAt ? formatDateTime(currentRound.startedAt) : 'N/A'}
-            </div>
-            <div className="info" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <strong>Time Ending:</strong> {currentRound?.endsAt ? formatDateTime(currentRound.endsAt) : 'N/A'}
-            </div>
-            <div className="info" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <strong>Current Round:</strong> {(auction.currentRound ?? 0) + 1} / {auction.totalRounds ?? 0}
-            </div>
-            <div className="info" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <strong>Total Gifts:</strong> {gifts?.totalGifts ?? 0}
-            </div>
-            <div className="info" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <strong>Already Awarded:</strong> {gifts?.alreadyAwarded ?? 0}
-            </div>
-            <div className="info" style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-              color: 'var(--accent-secondary)',
-              fontWeight: '600',
-            }}>
-              <strong>Remaining Gifts:</strong> {gifts?.remainingGifts ?? 0}
-            </div>
-            <div className="info" style={{
-              padding: '16px 20px',
-              color: 'var(--success)',
-              fontWeight: '600',
-            }}>
-              <strong>Gifts Available This Round:</strong> {gifts?.giftsPerRound ?? 0}
-              <div style={{ fontSize: '0.85em', opacity: 0.8, marginTop: '4px', fontWeight: '400' }}>
-                (max winners if enough bids)
+      {/* User Position */}
+      {currentUserId && userPosition && userPosition.position !== null && (
+        <Card 
+          variant="elevated" 
+          className={`border-2 ${
+            userPosition.canWin 
+              ? 'border-status-success bg-status-success/5' 
+              : 'border-status-error bg-status-error/5'
+          }`}
+        >
+          <div className="p-6">
+            <h3 className="text-xl font-semibold text-text-primary mb-4">Your Position</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-text-muted">Position</span>
+                <span className="text-3xl font-bold text-text-primary">#{userPosition.position}</span>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Top 3 Bids */}
-        <div className="detail-section" style={{ marginTop: '24px' }}>
-          <h3>Top 3 Participants</h3>
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            background: 'var(--bg-card)',
-            padding: '20px',
-            borderRadius: '12px',
-            border: '1px solid var(--border)',
-          }}>
-            {topBids && topBids.length > 0 ? (
-              topBids.map((bid, index) => {
-                // Проверяем, является ли ставка из предыдущего раунда (carry-over)
-                const isCarryOver = bid.roundIndex !== undefined && 
-                                   auction.currentRound !== undefined &&
-                                   bid.roundIndex < auction.currentRound;
-                
-                return (
-                  <div
-                    key={bid.userId}
-                    className={`bid-item-enhanced ${index === 0 ? 'top-bid' : ''}`}
-                    style={{
-                      padding: '16px',
-                      opacity: isCarryOver ? 0.85 : 1,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        background: index === 0
-                          ? 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))'
-                          : 'var(--bg-tertiary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '700',
-                        fontSize: '18px',
-                        color: 'white',
-                        flexShrink: 0,
-                      }}>
-                        {index + 1}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <div style={{ fontWeight: '600', fontSize: '16px' }}>
-                            {bid.username}
-                          </div>
-                          {isCarryOver && (
-                            <span className="badge" style={{ 
-                              fontSize: '9px',
-                              background: 'rgba(245, 158, 11, 0.2)',
-                              color: 'var(--warning)',
-                            }}>
-                              FROM ROUND {bid.roundIndex + 1}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          Bid placed {new Date(bid.createdAt).toLocaleString()}
-                          {bid.roundIndex !== undefined && (
-                            <span style={{ marginLeft: '8px' }}>
-                              • Round {bid.roundIndex + 1}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--accent-secondary)', marginBottom: '4px' }}>
-                        {bid.amount.toFixed(2)}
-                      </div>
-                      {index === 0 && (
-                        <span className="badge badge-success" style={{ fontSize: '10px' }}>
-                          LEADING
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>
-                No bids yet
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* User Position */}
-        {currentUserId && userPosition && userPosition.position !== null && (
-          <div className="detail-section" style={{ marginTop: '24px' }}>
-            <h3>Your Position</h3>
-            <div style={{
-              background: userPosition.canWin ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-              padding: '20px',
-              borderRadius: '12px',
-              border: `2px solid ${userPosition.canWin ? 'var(--success)' : 'var(--error)'}`,
-            }}>
-              <div style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>
-                Position: #{userPosition.position}
+              <div className="flex items-center justify-between">
+                <span className="text-text-muted">Your Bid</span>
+                <span className="text-xl font-semibold text-text-primary">
+                  {userPosition.amount?.toFixed(2) || '0.00'}
+                </span>
               </div>
-              <div style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                Your Bid: {userPosition.amount?.toFixed(2) || '0.00'}
-              </div>
-              {/* Показываем информацию о carry-over ставке */}
               {(() => {
-                // Находим ставку пользователя в топ-списке для проверки roundIndex
                 const userBidInTop = topBids?.find(b => b.userId === currentUserId);
                 const isCarryOver = userBidInTop && 
                                    userBidInTop.roundIndex !== undefined && 
@@ -555,160 +548,69 @@ const AuctionDetailPage = ({ auctionId, currentUserId, onBack }) => {
                 
                 if (isCarryOver) {
                   return (
-                    <div style={{ 
-                      fontSize: '13px', 
-                      color: 'var(--warning)', 
-                      marginBottom: '12px',
-                      padding: '8px',
-                      background: 'rgba(245, 158, 11, 0.1)',
-                      borderRadius: '6px',
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
-                    }}>
-                      This bid is from Round {userBidInTop.roundIndex + 1} (carried over to Round {auction.currentRound + 1})
+                    <div className="p-3 bg-status-warning/10 border border-status-warning/30 rounded-lg">
+                      <p className="text-sm text-status-warning">
+                        This bid is from Round {userBidInTop.roundIndex + 1} (carried over to Round {auction.currentRound + 1})
+                      </p>
                     </div>
                   );
                 }
                 return null;
               })()}
-              {userPosition.canWin ? (
-                <div style={{ color: 'var(--success)', fontWeight: '600', fontSize: '16px' }}>
-                  You can win (within top {gifts?.giftsPerRound ?? 0} winners)
-                </div>
-              ) : (
-                <div style={{ color: 'var(--error)', fontWeight: '600', fontSize: '16px' }}>
-                  You're outbid (need to be in top {gifts?.giftsPerRound ?? 0} winners)
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Timing Info with Circular Progress */}
-        {currentRound && (
-          <div className="detail-section" style={{ marginTop: '24px' }}>
-            <h3>Time Remaining</h3>
-            <div style={{
-              display: 'flex',
-              gap: '32px',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              background: 'var(--bg-card)',
-              padding: '24px',
-              borderRadius: '16px',
-              border: '1px solid var(--border)',
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                <CircularProgress
-                  progress={
-                    (() => {
-                      if (!currentRound?.startedAt || !currentRound?.endsAt) {
-                        return 0;
-                      }
-                      const now = Date.now();
-                      const startedAt = new Date(currentRound.startedAt).getTime();
-                      const endsAt = new Date(currentRound.endsAt).getTime();
-                      const totalDuration = endsAt - startedAt;
-                      if (totalDuration <= 0) return 100;
-                      const elapsed = now - startedAt;
-                      return Math.max(0, Math.min(100, (elapsed / totalDuration) * 100));
-                    })()
+              <div className={`p-3 rounded-lg ${userPosition.canWin ? 'bg-status-success/10 text-status-success' : 'bg-status-error/10 text-status-error'}`}>
+                <p className="font-semibold">
+                  {userPosition.canWin 
+                    ? `✓ You can win (within top ${gifts?.giftsPerRound ?? 0} winners)`
+                    : `✗ You're outbid (need to be in top ${gifts?.giftsPerRound ?? 0} winners)`
                   }
-                  size={100}
-                  color="var(--warning)"
-                />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Round Ends In</div>
-                  <div style={{ fontSize: '20px', fontWeight: '700', color: 'var(--warning)' }}>
-                    {formatTime(timeUntilRoundEnd)}
-                  </div>
-                </div>
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="stat-card">
-                  <div className="stat-card-label">Minimum Bid</div>
-                  <div className="stat-card-value" style={{ fontSize: '24px' }}>
-                    {auction.minBid?.toFixed(2) || '0.00'}
-                  </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-card-label">Total Time Remaining</div>
-                  <div className="stat-card-value" style={{ fontSize: '20px', color: 'var(--accent-secondary)' }}>
-                    {formatTime(totalTimeRemaining)}
-                  </div>
-                </div>
-                {currentRound?.startedAt && currentRound?.endsAt && (
-                  <div style={{ marginTop: '8px' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                      Round Progress
-                    </div>
-                    <div className="progress-bar">
-                      <div
-                        className="progress-bar-fill"
-                        style={{
-                          width: `${(() => {
-                            const startedAt = new Date(currentRound.startedAt).getTime();
-                            const endsAt = new Date(currentRound.endsAt).getTime();
-                            const total = endsAt - startedAt;
-                            if (total <= 0) return 100;
-                            const elapsed = Date.now() - startedAt;
-                            return Math.max(0, Math.min(100, (elapsed / total) * 100));
-                          })()}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
+                </p>
               </div>
             </div>
           </div>
-        )}
+        </Card>
+      )}
 
-        {/* Start Auction Button */}
-        {auction.status === 'CREATED' && (
-          <div className="detail-section" style={{ marginTop: '24px' }}>
-            <button className="btn-primary" onClick={handleStartAuction} style={{ width: '100%' }}>
-              Start Auction
-            </button>
+      {/* Start Auction Button */}
+      {auction.status === 'CREATED' && auction.createdBy === currentUserId && (
+        <Card variant="elevated">
+          <div className="p-6">
+            <Tooltip content="Start the auction to begin accepting bids">
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={handleStartAuction}
+                className="w-full"
+                leftIcon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                }
+              >
+                Start Auction
+              </Button>
+            </Tooltip>
           </div>
-        )}
+        </Card>
+      )}
 
-        {/* Place Bid Form */}
-        {auction.status === 'RUNNING' && currentUserId && (
-          <div className="detail-section" style={{ marginTop: '24px' }}>
-            <h3>Place Bid</h3>
-            {topBids && topBids.length > 0 && (
-              <div style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px' }}>
-                Current highest bid: <strong style={{ color: 'var(--accent-secondary)' }}>
-                  {topBids[0].amount.toFixed(2)}
-                </strong>
-              </div>
-            )}
-            <div className="bid-form">
-              <div className="form-group">
-                <label>Bid Amount</label>
-                <input
-                  type="number"
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                  min={auction.minBid}
-                  step="10"
-                />
-              </div>
-              <button className="btn-primary" onClick={handlePlaceBid}>
-                Place Bid
-              </button>
-            </div>
-            {bidResult && (
-              <div className={bidResult.type} style={{ marginTop: '12px' }}>
-                {bidResult.message}
-              </div>
-            )}
-          </div>
-        )}
+      {/* Place Bid Form */}
+      {auction.status === 'RUNNING' && currentUserId && (
+        <div>
+          <h2 className="text-xl font-semibold text-text-primary mb-4">Place Bid</h2>
+          <BidForm
+            onSubmit={handlePlaceBid}
+            minBid={auction.minBid || 0}
+            currentMaxBid={currentMaxBid}
+            loading={bidLoading}
+            error={bidError}
+            success={bidSuccess}
+          />
+        </div>
+      )}
 
-        {/* Rounds History */}
-        <RoundsHistory auctionId={auctionId} currentRound={auction.currentRound} />
-      </div>
+      {/* Rounds History */}
+      <RoundsHistory auctionId={auctionId} currentRound={auction.currentRound} />
     </div>
   );
 };

@@ -123,6 +123,7 @@ describe('AuctionService', () => {
         totalRounds: 3,
         roundDurationMs: 60000,
         minBid: 100,
+        createdBy: 'user123',
       };
 
       const mockAuction = {
@@ -144,6 +145,7 @@ describe('AuctionService', () => {
         currentRound: 0,
         roundDurationMs: dto.roundDurationMs,
         minBid: dto.minBid,
+        createdBy: dto.createdBy,
       });
       expect(result).toEqual(mockAuction);
     });
@@ -155,6 +157,7 @@ describe('AuctionService', () => {
         totalRounds: 3,
         roundDurationMs: 60000,
         minBid: 100,
+        createdBy: 'user123',
       };
 
       await expect(service.createAuction(dto)).rejects.toThrow(BadRequestException);
@@ -167,6 +170,7 @@ describe('AuctionService', () => {
         totalRounds: 0,
         roundDurationMs: 60000,
         minBid: 100,
+        createdBy: 'user123',
       };
 
       await expect(service.createAuction(dto)).rejects.toThrow(BadRequestException);
@@ -179,6 +183,7 @@ describe('AuctionService', () => {
         totalRounds: 3,
         roundDurationMs: 500,
         minBid: 100,
+        createdBy: 'user123',
       };
 
       await expect(service.createAuction(dto)).rejects.toThrow(BadRequestException);
@@ -191,6 +196,7 @@ describe('AuctionService', () => {
         totalRounds: 3,
         roundDurationMs: 60000,
         minBid: 0,
+        createdBy: 'user123',
       };
 
       await expect(service.createAuction(dto)).rejects.toThrow(BadRequestException);
@@ -200,6 +206,7 @@ describe('AuctionService', () => {
   describe('startAuction', () => {
     it('should start auction and create first round', async () => {
       const auctionId = 'auction123';
+      const userId = 'user123';
       const mockAuction = {
         _id: auctionId,
         giftId: 'gift123',
@@ -209,6 +216,7 @@ describe('AuctionService', () => {
         minBid: 100,
         status: AuctionStatus.CREATED,
         currentRound: 0,
+        createdBy: userId,
       };
 
       const mockUpdatedAuction = {
@@ -230,7 +238,7 @@ describe('AuctionService', () => {
         exec: jest.fn().mockResolvedValue(mockUpdatedAuction),
       });
 
-      const result = await service.startAuction(auctionId);
+      const result = await service.startAuction(auctionId, userId);
 
       expect(auctionModel.findById).toHaveBeenCalledWith(auctionId);
       expect(auctionRoundModel.create).toHaveBeenCalled();
@@ -247,6 +255,7 @@ describe('AuctionService', () => {
 
     it('should throw NotFoundException when auction not found', async () => {
       const auctionId = 'nonexistent';
+      const userId = 'user123';
 
       auctionModel.findById.mockReturnValue({
         session: jest.fn().mockReturnValue({
@@ -254,14 +263,16 @@ describe('AuctionService', () => {
         }),
       });
 
-      await expect(service.startAuction(auctionId)).rejects.toThrow(NotFoundException);
+      await expect(service.startAuction(auctionId, userId)).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when auction is not in CREATED status', async () => {
       const auctionId = 'auction123';
+      const userId = 'user123';
       const mockAuction = {
         _id: auctionId,
         status: AuctionStatus.RUNNING, // Already running
+        createdBy: userId,
       };
 
       auctionModel.findById.mockReturnValue({
@@ -270,7 +281,7 @@ describe('AuctionService', () => {
         }),
       });
 
-      await expect(service.startAuction(auctionId)).rejects.toThrow(BadRequestException);
+      await expect(service.startAuction(auctionId, userId)).rejects.toThrow(BadRequestException);
     });
   });
 

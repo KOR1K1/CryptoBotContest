@@ -12,6 +12,7 @@ import { AuctionModule } from '../services/auction/auction.module';
 import { BidModule } from '../services/bid/bid.module';
 import { GatewaysModule } from '../gateways/gateways.module';
 import { ThrottlerModule } from '../services/throttler/throttler.module';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * ApiModule
@@ -32,6 +33,7 @@ import { ThrottlerModule } from '../services/throttler/throttler.module';
     BidModule,
     GatewaysModule, // WebSocket gateway
     ThrottlerModule, // WebSocket throttling
+    AuthModule, // Authentication and authorization (exports JwtAuthGuard)
   ],
   controllers: [UsersController, AuctionsController, GiftsController],
   exports: [],

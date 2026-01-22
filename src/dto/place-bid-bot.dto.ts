@@ -1,0 +1,32 @@
+import { IsNotEmpty, IsNumber, Min, Max, IsInt, IsMongoId } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
+
+/**
+ * PlaceBidBotDto
+ * 
+ * DTO for placing a bid via bot endpoint
+ * Note: userId is allowed in body for bot simulation/testing purposes
+ */
+export class PlaceBidBotDto {
+  @ApiProperty({
+    description: 'MongoDB ObjectId of the user placing the bid (for bot simulation)',
+    example: '507f1f77bcf86cd799439011',
+  })
+  @IsMongoId()
+  @IsNotEmpty()
+  userId!: string;
+
+  @ApiProperty({
+    description: 'Bid amount (must be >= minBid and > current user bid if updating)',
+    example: 150,
+    minimum: 1,
+    maximum: 1000000000,
+  })
+  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(1000000000) // Maximum 1 billion (reasonable upper limit)
+  @Type(() => Number)
+  amount!: number;
+}

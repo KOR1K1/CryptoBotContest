@@ -11,8 +11,19 @@ export const useWebSocket = (auctionId = null) => {
   const previousAuctionIdRef = useRef(null);
 
   useEffect(() => {
+    // Get token from localStorage
+    const token = localStorage.getItem('auth_token');
+    
     const socketInstance = io(`${WS_URL}/auctions`, {
       transports: ['websocket', 'polling'],
+      // Send token in handshake.auth (preferred method)
+      auth: token ? { token } : undefined,
+      // Don't send token in query if we have it in auth (avoid duplication)
+      // Only use query as fallback if no token in auth
+      query: token ? {} : {},
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
     });
 
     socketInstance.on('connect', () => {
@@ -23,9 +34,22 @@ export const useWebSocket = (auctionId = null) => {
       }
     });
 
-    socketInstance.on('disconnect', () => {
-      console.log('WebSocket disconnected');
+    socketInstance.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
       setConnected(false);
+    });
+
+    socketInstance.on('connect_error', (error) => {
+      console.error('WebSocket connection error:', error);
+      setConnected(false);
+    });
+
+    socketInstance.on('reconnect', (attemptNumber) => {
+      console.log('WebSocket reconnected after', attemptNumber, 'attempts');
+      setConnected(true);
+      if (auctionId) {
+        socketInstance.emit('subscribe', { auctionId });
+      }
     });
 
     setSocket(socketInstance);

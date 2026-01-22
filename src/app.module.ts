@@ -13,6 +13,7 @@ import { ApiModule } from './api/api.module';
 import { GatewaysModule } from './gateways/gateways.module';
 import { MonitoringModule } from './services/monitoring/monitoring.module';
 import { RedisLockModule } from './services/redis-lock/redis-lock.module';
+import { AuthModule } from './auth/auth.module';
 import { CacheConfigService } from './config/cache.config';
 import configuration from './config/configuration';
 import { SkipGetThrottleGuard } from './common/guards/skip-get-throttle.guard';
@@ -76,6 +77,7 @@ import { SkipGetThrottleGuard } from './common/guards/skip-get-throttle.guard';
     GatewaysModule, // WebSocket gateways for real-time updates
     MonitoringModule, // MongoDB metrics and monitoring
     RedisLockModule, // Distributed locking with Redis (optional, falls back to MongoDB transactions)
+    AuthModule, // Authentication and authorization
     CacheModule.registerAsync({
       isGlobal: true, // Make cache available globally
       inject: [ConfigService],

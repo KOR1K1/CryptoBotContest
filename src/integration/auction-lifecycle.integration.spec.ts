@@ -155,13 +155,14 @@ describe('Auction Lifecycle Integration Test', () => {
       totalRounds: 2, // 2 rounds, so 2 gifts per round
       roundDurationMs: 5000, // 5 seconds per round
       minBid: 100,
+      createdBy: user1._id.toString(),
     });
 
     expect(auction.status).toBe(AuctionStatus.CREATED);
     expect(auction.currentRound).toBe(0);
 
-    // Step 2: Start auction
-    await auctionService.startAuction(auction._id.toString());
+    // Step 2: Start auction (only creator can start)
+    await auctionService.startAuction(auction._id.toString(), user1._id.toString());
 
     const startedAuction = await auctionModel.findById(auction._id).exec();
     expect(startedAuction?.status).toBe(AuctionStatus.RUNNING);
@@ -179,24 +180,21 @@ describe('Auction Lifecycle Integration Test', () => {
 
     // Step 3: Place bids in Round 0
     // User1: 1500
-    await bidService.placeBid({
-      userId: user1._id.toString(),
+    await bidService.placeBid(user1._id.toString(), {
       auctionId: auction._id.toString(),
       amount: 1500,
       currentRound: 0,
     });
 
     // User2: 1200
-    await bidService.placeBid({
-      userId: user2._id.toString(),
+    await bidService.placeBid(user2._id.toString(), {
       auctionId: auction._id.toString(),
       amount: 1200,
       currentRound: 0,
     });
 
     // User3: 1000
-    await bidService.placeBid({
-      userId: user3._id.toString(),
+    await bidService.placeBid(user3._id.toString(), {
       auctionId: auction._id.toString(),
       amount: 1000,
       currentRound: 0,
@@ -304,16 +302,14 @@ describe('Auction Lifecycle Integration Test', () => {
 
     // Step 6: Place bids in Round 1
     // User3 increases bid: 1100
-    await bidService.placeBid({
-      userId: user3._id.toString(),
+    await bidService.placeBid(user3._id.toString(), {
       auctionId: auction._id.toString(),
       amount: 1100,
       currentRound: 1,
     });
 
     // User1 places new bid: 800 (lower than before, but still valid)
-    await bidService.placeBid({
-      userId: user1._id.toString(),
+    await bidService.placeBid(user1._id.toString(), {
       auctionId: auction._id.toString(),
       amount: 800,
       currentRound: 1,

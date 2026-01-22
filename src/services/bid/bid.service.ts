@@ -18,11 +18,29 @@ import { AuctionStatus } from '../../common/enums/auction-status.enum';
 import { BalanceService } from '../balance/balance.service';
 import { RedisLockService } from '../redis-lock/redis-lock.service';
 
+/**
+ * PlaceBidDto (internal interface for BidService)
+ * 
+ * Note: userId is now passed as a separate parameter, not in DTO
+ * This ensures userId comes from JWT token, not from request body
+ */
 export interface PlaceBidDto {
-  userId: string;
   auctionId: string;
   amount: number;
   currentRound: number; // Passed from AuctionService to avoid circular dependency
+}
+
+/**
+ * PlaceBidBotDto (for bot simulation)
+ * 
+ * Used for bot endpoints where userId can be provided in body
+ * (for testing and simulation purposes)
+ */
+export interface PlaceBidBotDto {
+  userId: string; // Allowed for bots
+  auctionId: string;
+  amount: number;
+  currentRound: number;
 }
 
 /**
@@ -123,7 +141,7 @@ export class BidService {
   }
 
   /**
-   * Place a bid or increase existing bid
+   * Place a bid or increase existing bid (for authenticated users)
    *
    * Rules:
    * - If user has no active bid: create new bid
@@ -134,13 +152,14 @@ export class BidService {
    * OPTIMIZED: All validations are done INSIDE transaction to avoid race conditions
    * and reduce number of database queries (critical for performance).
    *
-   * @param dto PlaceBidDto with userId, auctionId, amount, currentRound
+   * @param userId User ID (from JWT token, not from request body)
+   * @param dto PlaceBidDto with auctionId, amount, currentRound
    * @returns Created or updated bid document
    * @throws BadRequestException if validation fails
    * @throws ConflictException if bid cannot be placed
    */
-  async placeBid(dto: PlaceBidDto): Promise<BidDocument> {
-    const { userId, auctionId, amount, currentRound } = dto;
+  async placeBid(userId: string, dto: PlaceBidDto): Promise<BidDocument> {
+    const { auctionId, amount, currentRound } = dto;
 
     // Retry configuration for transaction conflicts
     // Optimized for high concurrency: more retries with exponential backoff
@@ -161,14 +180,14 @@ export class BidService {
       return this.redisLockService.withLock(
         userLockKey,
         async () => {
-          return this.executePlaceBidTransaction(dto, null, MAX_RETRIES, RETRY_DELAY_MS);
+          return this.executePlaceBidTransaction(userId, dto, null, MAX_RETRIES, RETRY_DELAY_MS);
         },
         5, // Reduced TTL to 5 seconds for faster release
         { maxRetries: 1, retryDelayMs: 10 }, // Faster retry
       );
     } else {
       // Fallback: Use MongoDB transactions only (works fine for most scenarios)
-      return this.executePlaceBidTransaction(dto, null, MAX_RETRIES, RETRY_DELAY_MS);
+      return this.executePlaceBidTransaction(userId, dto, null, MAX_RETRIES, RETRY_DELAY_MS);
     }
   }
 
@@ -180,19 +199,21 @@ export class BidService {
    * 2. Reduce number of database queries (critical for performance)
    * 3. Ensure atomicity of all checks and operations
    * 
-   * @param dto PlaceBidDto
+   * @param userId User ID (from JWT token)
+   * @param dto PlaceBidDto (without userId)
    * @param existingBid DEPRECATED: Always pass null, will be checked inside transaction
    * @param maxRetries Maximum retry attempts
    * @param retryDelayMs Initial retry delay
    * @returns Created or updated bid document
    */
   private async executePlaceBidTransaction(
+    userId: string,
     dto: PlaceBidDto,
     existingBid: BidDocument | null, // DEPRECATED: kept for compatibility, always null
     maxRetries: number,
     retryDelayMs: number,
   ): Promise<BidDocument> {
-    const { userId, auctionId, amount, currentRound } = dto;
+    const { auctionId, amount, currentRound } = dto;
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
