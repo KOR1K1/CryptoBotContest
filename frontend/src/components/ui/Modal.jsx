@@ -110,8 +110,7 @@ const Modal = ({
         right: 0,
         bottom: 0,
         width: '100vw',
-        height: '100vh',
-        height: '100dvh', // Dynamic viewport height для мобильных
+        height: '100dvh',
         zIndex: 50,
         display: 'flex',
         alignItems: 'center',
@@ -238,13 +237,9 @@ const Modal = ({
             // Предотвращаем "отпружинивание" на iOS
             overscrollBehavior: 'contain',
             overscrollBehaviorY: 'contain',
+            WebkitOverscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
             touchAction: 'pan-y',
-            // Убеждаемся, что контент может прокручиваться правильно
-            WebkitOverscrollBehavior: 'contain',
-            // Предотвращаем bounce effect на iOS
-            WebkitOverflowScrolling: 'touch',
-            // Убеждаемся, что контент имеет правильную высоту для прокрутки
             position: 'relative',
           }}
           onTouchStart={(e) => {
