@@ -16,7 +16,9 @@
 
 ---
 
-https://github.com/user-attachments/assets/a8db1c49-6155-4a2b-978e-be7ace42bec2
+## Видео-демонстрация проекта:
+
+https://youtu.be/bJ4Xs78BjAo
 
 ## О проекте
 
