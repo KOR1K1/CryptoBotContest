@@ -17,34 +17,34 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from '../models/user.schema';
 import { AuthService } from '../auth/auth.service';
 
-/**
- * AuctionsGateway
- * 
- * WebSocket gateway for real-time auction updates
- * Emits events when:
- * - New bids are placed (throttled via BidUpdateThrottlerService)
- * - Auction status changes
- * - Rounds close
- * - Winners are selected
- * 
- * Authentication:
- * - Primary: JWT token from handshake.auth.token or query.token
- * - Fallback: userId query parameter (for development/testing)
- * - Token is validated and userId is extracted from JWT payload
- */
+// websocket для обновлений аукционов в реальном времени
+// аутентификация через JWT или userId (для тестов)
 @WebSocketGateway({
   cors: {
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, Postman)
-      if (!origin) {
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      
+      // без origin разрешаем в дев режиме (мобилки, постман)
+      if (!origin && isDevelopment) {
         return callback(null, true);
       }
-      // Get allowed origins from config (same as REST API)
+      
+      // в дев режиме разрешаем localhost и локальную сеть
+      if (isDevelopment && origin) {
+        const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+        const isLocalNetwork = /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin);
+        
+        if (isLocalhost || isLocalNetwork) {
+          return callback(null, true);
+        }
+      }
+      
       const allowedOrigins = process.env.CORS_ORIGINS?.split(',') || [
         'http://localhost:3001',
         'http://localhost:3000',
       ];
-      if (allowedOrigins.includes(origin)) {
+      
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -72,13 +72,12 @@ export class AuctionsGateway
     private jwtService: JwtService,
     private authService: AuthService,
   ) {
-    // In production, require authentication; in development, make it optional
+    // в продакшене требуем аутентификацию, в деве опционально
     this.requireAuth = this.configService.get<string>('nodeEnv', 'development') === 'production';
   }
 
   afterInit(server: Server) {
     this.logger.log('Auctions WebSocket Gateway initialized');
-    // Set up authentication middleware
     server.use(async (socket: Socket, next) => {
       try {
         let user: UserDocument | null = null;
@@ -111,19 +110,15 @@ export class AuctionsGateway
             
             this.logger.log(`WebSocket authenticated via JWT: userId=${userId}, client=${socket.id}`);
           } catch (tokenError) {
-            // Token is invalid or expired
             if (this.requireAuth) {
               this.logger.warn(`WebSocket connection rejected: invalid JWT token (client: ${socket.id})`);
               return next(new Error('Authentication failed: invalid or expired token'));
             } else {
-              // In development, log warning but continue (allow connection without auth)
               this.logger.debug(`WebSocket JWT token invalid (development mode): ${tokenError instanceof Error ? tokenError.message : String(tokenError)}`);
-              // Don't set user/userId if token is invalid, but allow connection
             }
           }
         }
 
-        // Fallback: Try userId from query parameter (for development/testing)
         if (!user && !userId) {
           const queryUserId = socket.handshake.query.userId as string | undefined;
           
@@ -182,9 +177,6 @@ export class AuctionsGateway
     }
   }
 
-  /**
-   * Subscribe to auction updates
-   */
   @SubscribeMessage('subscribe')
   handleSubscribe(client: Socket, payload: { auctionId: string }) {
     if (payload?.auctionId) {
@@ -193,9 +185,6 @@ export class AuctionsGateway
     }
   }
 
-  /**
-   * Unsubscribe from auction updates
-   */
   @SubscribeMessage('unsubscribe')
   handleUnsubscribe(client: Socket, payload: { auctionId: string }) {
     if (payload?.auctionId) {
@@ -204,20 +193,12 @@ export class AuctionsGateway
     }
   }
 
-  /**
-   * Emit bid update to all subscribers of an auction (THROTTLED)
-   * Uses BidUpdateThrottlerService to batch updates and emit only significant changes
-   * 
-   * @param auctionId Auction ID
-   * @param bid Bid update data
-   */
+  // отправка обновления ставки подписчикам (с троттлингом)
   emitBidUpdate(auctionId: string, bid: any) {
-    // Use throttler if available, otherwise emit immediately (fallback)
     if (this.bidUpdateThrottler) {
       this.bidUpdateThrottler.queueBidUpdate(auctionId, bid);
       this.logger.debug(`Queued bid_update for auction ${auctionId} (throttled)`);
     } else {
-      // Fallback: emit immediately if throttler not available
       this.server.to(`auction:${auctionId}`).emit('bid_update', {
         auctionId,
         bid,
@@ -227,13 +208,7 @@ export class AuctionsGateway
     }
   }
 
-  /**
-   * Emit bid update immediately (bypass throttler)
-   * Used for critical updates that must be sent immediately
-   * 
-   * @param auctionId Auction ID
-   * @param data Update data (can be single bid or aggregated update)
-   */
+  // отправка обновления сразу, без троттлинга
   emitBidUpdateImmediate(auctionId: string, data: any) {
     this.server.to(`auction:${auctionId}`).emit('bid_update', {
       auctionId,
@@ -243,9 +218,6 @@ export class AuctionsGateway
     this.logger.debug(`Emitted bid_update immediately for auction ${auctionId}`);
   }
 
-  /**
-   * Emit auction status update
-   */
   emitAuctionUpdate(auctionId: string, auction: any) {
     const room = `auction:${auctionId}`;
     const eventData = {
@@ -254,18 +226,12 @@ export class AuctionsGateway
       timestamp: new Date().toISOString(),
     };
     
-    // Emit to room (subscribed clients)
     this.server.to(room).emit('auction_update', eventData);
-    
-    // Also emit globally for list updates (important for completed auctions)
     this.server.emit('auction_update', eventData);
     
     this.logger.log(`Emitted auction_update for auction ${auctionId}, status: ${auction?.status || 'unknown'}`);
   }
 
-  /**
-   * Emit round closed event
-   */
   emitRoundClosed(auctionId: string, round: any, winners: any[]) {
     this.server.to(`auction:${auctionId}`).emit('round_closed', {
       auctionId,
@@ -276,9 +242,6 @@ export class AuctionsGateway
     this.logger.log(`Emitted round_closed for auction ${auctionId}, round ${round.roundIndex}`);
   }
 
-  /**
-   * Emit global auction list update
-   */
   emitAuctionsListUpdate() {
     this.server.emit('auctions_list_update', {
       timestamp: new Date().toISOString(),

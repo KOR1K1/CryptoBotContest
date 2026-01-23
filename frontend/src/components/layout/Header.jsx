@@ -4,17 +4,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 
-/**
- * Header Component
- * 
- * Шапка приложения с информацией о пользователе и балансе
- */
 const Header = () => {
   const { user, logout } = useAuth();
   const [balance, setBalance] = useState({ balance: 0, lockedBalance: 0, total: 0 });
   const balanceIntervalRef = useRef(null);
 
-  // Load balance when user changes
   useEffect(() => {
     if (!user?.id) {
       setBalance({ balance: 0, lockedBalance: 0, total: 0 });
@@ -91,29 +85,22 @@ const Header = () => {
       }
     };
 
-    // Also handle window blur/focus events (for browser minimization)
     const handleWindowBlur = () => {
-      // Browser window lost focus (minimized or switched to another app)
       stopPolling();
     };
 
     const handleWindowFocus = () => {
-      // Browser window regained focus
       if (!document.hidden && document.visibilityState !== 'hidden') {
         refreshBalance(); // Immediate refresh
         startPolling(ACTIVE_INTERVAL);
       }
     };
 
-    // Start with active interval (only if tab is visible)
     if (!document.hidden && document.visibilityState !== 'hidden') {
       startPolling(ACTIVE_INTERVAL);
     }
 
-    // Listen for tab visibility changes
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Listen for window blur/focus (for browser minimization)
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
 
@@ -131,69 +118,70 @@ const Header = () => {
         {/* Logo/Title */}
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-text-primary">
-            Auction System
+            Система аукционов
           </h1>
         </div>
 
         {/* User Section */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto min-w-0">
           {user ? (
             <>
               {/* User Info */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-bg-secondary rounded-lg border border-border">
-                  <div className="w-8 h-8 rounded-full bg-accent-primary flex items-center justify-center text-white font-semibold text-sm">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
+                <div className="flex items-center gap-2 px-2 sm:px-3 py-1.5 bg-bg-secondary rounded-lg border border-border min-w-0 overflow-hidden">
+                  <div className="w-8 h-8 rounded-full bg-accent-primary flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                     {user.username?.[0]?.toUpperCase() || 'U'}
                   </div>
-                  <span className="text-text-primary font-medium">
+                  <span className="text-text-primary font-medium truncate min-w-0">
                     {user.username || user.id}
                   </span>
                 </div>
                 
-                <Tooltip content="Logout from your account">
+                <Tooltip content="Выйти из аккаунта">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={logout}
+                    className="flex-shrink-0"
                     leftIcon={
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                       </svg>
                     }
                   >
-                    Logout
+                    <span className="hidden sm:inline">Выход</span>
                   </Button>
                 </Tooltip>
               </div>
 
               {/* Balance Display */}
-              <div className="flex flex-wrap items-center gap-4 px-4 py-2 bg-bg-secondary rounded-lg border border-border">
-                <Tooltip content="Available balance for placing bids">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-text-muted uppercase tracking-wide">Available</span>
-                    <span className="text-lg font-semibold text-text-primary">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 bg-bg-secondary rounded-lg border border-border w-full sm:w-auto overflow-x-auto sm:overflow-x-visible">
+                <Tooltip content="Доступный баланс для размещения ставок">
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <span className="text-xs text-text-muted uppercase tracking-wide whitespace-nowrap">Доступно</span>
+                    <span className="text-base sm:text-lg font-semibold text-text-primary whitespace-nowrap">
                       {balance.balance.toFixed(2)}
                     </span>
                   </div>
                 </Tooltip>
 
-                <div className="w-px h-8 bg-border" />
+                <div className="w-px h-8 bg-border flex-shrink-0" />
 
-                <Tooltip content="Balance locked in active bids">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-text-muted uppercase tracking-wide">Locked</span>
-                    <span className={`text-lg font-semibold ${balance.lockedBalance > 0 ? 'text-status-warning' : 'text-text-secondary'}`}>
+                <Tooltip content="Баланс заблокирован в активных ставках">
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <span className="text-xs text-text-muted uppercase tracking-wide whitespace-nowrap">Заблокировано</span>
+                    <span className={`text-base sm:text-lg font-semibold whitespace-nowrap ${balance.lockedBalance > 0 ? 'text-status-warning' : 'text-text-secondary'}`}>
                       {balance.lockedBalance.toFixed(2)}
                     </span>
                   </div>
                 </Tooltip>
 
-                <div className="w-px h-8 bg-border" />
+                <div className="w-px h-8 bg-border flex-shrink-0" />
 
-                <Tooltip content="Total balance (available + locked)">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs text-text-muted uppercase tracking-wide">Total</span>
-                    <span className="text-lg font-semibold text-status-success">
+                <Tooltip content="Общий баланс (доступно + заблокировано)">
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <span className="text-xs text-text-muted uppercase tracking-wide whitespace-nowrap">Всего</span>
+                    <span className="text-base sm:text-lg font-semibold text-status-success whitespace-nowrap">
                       {balance.total.toFixed(2)}
                     </span>
                   </div>
@@ -202,7 +190,7 @@ const Header = () => {
             </>
           ) : (
             <div className="text-text-muted text-sm">
-              Not logged in
+              Не авторизован
             </div>
           )}
         </div>

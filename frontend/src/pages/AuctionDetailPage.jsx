@@ -14,11 +14,6 @@ import Loading from '../components/ui/Loading';
 import Tooltip from '../components/ui/Tooltip';
 import EmptyState from '../components/ui/EmptyState';
 
-/**
- * AuctionDetailPage Component
- * 
- * Страница детального просмотра аукциона с улучшенным дизайном
- */
 const AuctionDetailPage = () => {
   const { id: auctionId } = useParams();
   const navigate = useNavigate();
@@ -43,14 +38,11 @@ const AuctionDetailPage = () => {
 
     try {
       setError(null);
-      // Use new optimized dashboard endpoint
-      // Add timestamp to bypass cache if force refresh
       const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
       const url = `/auctions/${auctionId}/dashboard${currentUserId ? `?userId=${currentUserId}${cacheBuster}` : cacheBuster ? `?${cacheBuster.substring(1)}` : ''}`;
       const data = await apiRequest(url);
       setDashboardData(data);
 
-      // Get gift info
       try {
         if (data.auction.giftId) {
           const gift = await apiRequest(`/gifts/${data.auction.giftId}`);
@@ -62,8 +54,8 @@ const AuctionDetailPage = () => {
       }
     } catch (error) {
       console.error('Error loading dashboard:', error);
-      setError(error.message || 'Failed to load auction');
-      showToast(`Failed to load auction: ${error.message}`, 'error');
+      setError(error.message || 'Не удалось загрузить аукцион');
+      showToast(`Не удалось загрузить аукцион: ${error.message}`, 'error');
       setDashboardData(null);
       setGiftInfo({});
     } finally {
@@ -115,7 +107,6 @@ const AuctionDetailPage = () => {
       }
     };
 
-    // Start with active interval (only if tab is visible)
     if (!document.hidden && document.visibilityState !== 'hidden') {
       startPolling(ACTIVE_INTERVAL);
     }
@@ -124,7 +115,6 @@ const AuctionDetailPage = () => {
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
 
-    // Listen for refresh events from WebSocket
     const handleRefresh = (event) => {
       const forceRefresh = event?.detail?.force === true;
       if (forceRefresh) {
@@ -177,7 +167,6 @@ const AuctionDetailPage = () => {
     };
   }, [loadDashboard, auctionId]);
 
-  // Update timers (only when tab is visible)
   useEffect(() => {
     if (!dashboardData?.currentRound) {
       setTimeUntilRoundEnd(0);
@@ -254,23 +243,23 @@ const AuctionDetailPage = () => {
   }, [dashboardData?.currentRound]);
 
   const formatDateTime = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return 'Н/Д';
+    return new Date(dateString).toLocaleString('ru-RU');
   };
 
   const handleStartAuction = async () => {
     try {
       await apiRequest(`/auctions/${auctionId}/start`, { method: 'POST' });
-      showToast('Auction started successfully!', 'success');
+      showToast('Аукцион успешно запущен!', 'success');
       loadDashboard(true);
     } catch (error) {
-      showToast(`Error starting auction: ${error.message}`, 'error');
+      showToast(`Ошибка запуска аукциона: ${error.message}`, 'error');
     }
   };
 
   const handlePlaceBid = async (amount) => {
     if (!currentUserId) {
-      setBidError('Please login to place a bid');
+      setBidError('Пожалуйста, войдите в систему, чтобы разместить ставку');
       return;
     }
 
@@ -284,14 +273,14 @@ const AuctionDetailPage = () => {
         data: { amount },
       });
 
-      setBidSuccess('Bid placed successfully!');
-      showToast('Bid placed successfully!', 'success');
+      setBidSuccess('Ставка успешно размещена!');
+      showToast('Ставка успешно размещена!', 'success');
       loadDashboard(true);
       setTimeout(() => {
         setBidSuccess(null);
       }, 3000);
     } catch (error) {
-      const errorMessage = error.message || 'Failed to place bid';
+      const errorMessage = error.message || 'Не удалось разместить ставку';
       setBidError(errorMessage);
       showToast(errorMessage, 'error');
     } finally {
@@ -299,24 +288,23 @@ const AuctionDetailPage = () => {
     }
   };
 
-  // Loading State
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <Tooltip content="Return to auctions list">
+          <Tooltip content="Вернуться к списку аукционов">
             <Button variant="ghost" onClick={() => navigate('/auctions')} leftIcon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             }>
-              Back to Auctions
+              Назад к аукционам
             </Button>
           </Tooltip>
         </div>
         <Card variant="elevated" className="p-12 text-center">
           <Loading.Spinner size="lg" />
-          <p className="text-text-secondary mt-4">Loading auction details...</p>
+          <p className="text-text-secondary mt-4">Загрузка деталей аукциона...</p>
         </Card>
       </div>
     );
@@ -327,24 +315,24 @@ const AuctionDetailPage = () => {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <Tooltip content="Return to auctions list">
+          <Tooltip content="Вернуться к списку аукционов">
             <Button variant="ghost" onClick={() => navigate('/auctions')} leftIcon={
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             }>
-              Back to Auctions
+              Назад к аукционам
             </Button>
           </Tooltip>
         </div>
         <Card variant="elevated" className="p-8 text-center">
           <div className="space-y-4">
             <div className="text-status-error text-6xl">⚠️</div>
-            <h2 className="text-2xl font-semibold text-text-primary">Auction Not Found</h2>
+            <h2 className="text-2xl font-semibold text-text-primary">Аукцион не найден</h2>
             <p className="text-text-secondary">{error}</p>
-            <Tooltip content="Try loading the auction again">
+            <Tooltip content="Попробовать загрузить аукцион снова">
               <Button variant="primary" onClick={() => loadDashboard(true)}>
-                Retry
+                Повторить
               </Button>
             </Tooltip>
           </div>
@@ -358,11 +346,26 @@ const AuctionDetailPage = () => {
   const { auction, currentRound, gifts, topBids, userPosition } = dashboardData;
   const currentMaxBid = topBids && topBids.length > 0 ? topBids[0].amount : null;
 
+  const getStatusLabel = (status) => {
+    if (!status) return 'Неизвестно';
+    const statusStr = typeof status === 'string' ? status : String(status);
+    const statusUpper = statusStr.toUpperCase().trim();
+    
+    const statusMap = {
+      'CREATED': 'Создан',
+      'RUNNING': 'Идет',
+      'FINALIZING': 'Завершается',
+      'COMPLETED': 'Завершен',
+    };
+    
+    return statusMap[statusUpper] || statusStr;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Tooltip content="Return to auctions list">
+        <Tooltip content="Вернуться к списку аукционов">
           <Button 
             variant="ghost" 
             onClick={() => navigate('/auctions')}
@@ -372,11 +375,11 @@ const AuctionDetailPage = () => {
               </svg>
             }
           >
-            Back to Auctions
+            Назад к аукционам
           </Button>
         </Tooltip>
         
-        <Tooltip content="Refresh auction data">
+        <Tooltip content="Обновить данные аукциона">
           <Button 
             variant="secondary" 
             onClick={() => loadDashboard(true)}
@@ -386,7 +389,7 @@ const AuctionDetailPage = () => {
               </svg>
             }
           >
-            Refresh
+            Обновить
           </Button>
         </Tooltip>
       </div>
@@ -397,7 +400,7 @@ const AuctionDetailPage = () => {
           {giftInfo?.imageUrl ? (
             <img
               src={giftInfo.imageUrl}
-              alt={giftInfo.title || 'Auction gift'}
+              alt={giftInfo.title || 'Подарок аукциона'}
               className="w-full h-full object-cover"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -432,53 +435,61 @@ const AuctionDetailPage = () => {
               }
               size="md"
             >
-              {auction.status}
+              {getStatusLabel(auction?.status)}
             </Badge>
           </div>
         </div>
       </Card>
 
       {/* Auction Information */}
-      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Auction Information</h2>}>
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Информация об аукционе</h2>}>
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-text-muted">Time Started</span>
+            <span className="text-text-muted">Время начала</span>
             <span className="text-text-primary font-medium">
-              {currentRound?.startedAt ? formatDateTime(currentRound.startedAt) : 'N/A'}
+              {currentRound?.startedAt ? formatDateTime(currentRound.startedAt) : 'Н/Д'}
             </span>
           </div>
           <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-text-muted">Time Ending</span>
+            <span className="text-text-muted">Время окончания</span>
             <span className="text-text-primary font-medium">
-              {currentRound?.endsAt ? formatDateTime(currentRound.endsAt) : 'N/A'}
+              {currentRound?.endsAt ? formatDateTime(currentRound.endsAt) : 'Н/Д'}
             </span>
           </div>
           <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-text-muted">Current Round</span>
+            <span className="text-text-muted">
+              {auction.status === 'COMPLETED' ? 'Последний раунд' : 'Текущий раунд'}
+            </span>
             <span className="text-text-primary font-medium">
-              {(auction.currentRound ?? 0) + 1} / {auction.totalRounds ?? 0}
+              {auction.status === 'COMPLETED' 
+                ? `${auction.totalRounds ?? 0} / ${auction.totalRounds ?? 0} (Завершен)`
+                : `${(auction.currentRound ?? 0) + 1} / ${auction.totalRounds ?? 0}`}
             </span>
           </div>
           <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-text-muted">Total Gifts</span>
-            <span className="text-text-primary font-medium">{gifts?.totalGifts ?? 0}</span>
+            <span className="text-text-muted">Всего подарков</span>
+            <span className="text-text-primary font-medium">{gifts?.totalGifts ?? auction.totalGifts ?? 0}</span>
           </div>
           <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-text-muted">Already Awarded</span>
+            <span className="text-text-muted">Уже вручено</span>
             <span className="text-text-primary font-medium">{gifts?.alreadyAwarded ?? 0}</span>
           </div>
           <div className="flex items-center justify-between py-2 border-b border-border">
-            <span className="text-text-muted">Remaining Gifts</span>
-            <span className="text-status-success font-semibold">{gifts?.remainingGifts ?? 0}</span>
+            <span className="text-text-muted">Осталось подарков</span>
+            <span className={`font-semibold ${gifts?.remainingGifts === 0 && auction.status === 'COMPLETED' ? 'text-status-success' : 'text-status-success'}`}>
+              {gifts?.remainingGifts ?? 0}
+            </span>
           </div>
-          <div className="flex items-center justify-between py-2">
-            <span className="text-text-muted">Gifts Available This Round</span>
-            <Tooltip content="Maximum number of winners in this round">
-              <span className="text-status-success font-semibold text-lg">
-                {gifts?.giftsPerRound ?? 0}
-              </span>
-            </Tooltip>
-          </div>
+          {auction.status !== 'COMPLETED' && (
+            <div className="flex items-center justify-between py-2">
+              <span className="text-text-muted">Подарков в этом раунде</span>
+              <Tooltip content="Максимальное количество победителей в этом раунде">
+                <span className="text-status-success font-semibold text-lg">
+                  {gifts?.giftsPerRound ?? 0}
+                </span>
+              </Tooltip>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -493,7 +504,7 @@ const AuctionDetailPage = () => {
       )}
 
       {/* Top 3 Participants */}
-      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Top 3 Participants</h2>}>
+      <Card variant="elevated" header={<h2 className="text-xl font-semibold text-text-primary">Топ 3 участника</h2>}>
         {topBids && topBids.length > 0 ? (
           <div className="space-y-3">
             {topBids.map((bid, index) => (
@@ -509,8 +520,8 @@ const AuctionDetailPage = () => {
         ) : (
           <EmptyState
             icon="🎯"
-            title="No Bids Yet"
-            message="Be the first to place a bid! Your bid will appear here once you participate."
+            title="Ставок пока нет"
+            message="Станьте первым, кто сделает ставку! Ваша ставка появится здесь после участия."
             className="py-8"
           />
         )}
@@ -527,14 +538,14 @@ const AuctionDetailPage = () => {
           }`}
         >
           <div className="p-6">
-            <h3 className="text-xl font-semibold text-text-primary mb-4">Your Position</h3>
+            <h3 className="text-xl font-semibold text-text-primary mb-4">Ваша позиция</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-text-muted">Position</span>
+                <span className="text-text-muted">Позиция</span>
                 <span className="text-3xl font-bold text-text-primary">#{userPosition.position}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-text-muted">Your Bid</span>
+                <span className="text-text-muted">Ваша ставка</span>
                 <span className="text-xl font-semibold text-text-primary">
                   {userPosition.amount?.toFixed(2) || '0.00'}
                 </span>
@@ -550,7 +561,7 @@ const AuctionDetailPage = () => {
                   return (
                     <div className="p-3 bg-status-warning/10 border border-status-warning/30 rounded-lg">
                       <p className="text-sm text-status-warning">
-                        This bid is from Round {userBidInTop.roundIndex + 1} (carried over to Round {auction.currentRound + 1})
+                        Эта ставка из раунда {userBidInTop.roundIndex + 1} (перенесена в раунд {auction.currentRound + 1})
                       </p>
                     </div>
                   );
@@ -560,8 +571,8 @@ const AuctionDetailPage = () => {
               <div className={`p-3 rounded-lg ${userPosition.canWin ? 'bg-status-success/10 text-status-success' : 'bg-status-error/10 text-status-error'}`}>
                 <p className="font-semibold">
                   {userPosition.canWin 
-                    ? `✓ You can win (within top ${gifts?.giftsPerRound ?? 0} winners)`
-                    : `✗ You're outbid (need to be in top ${gifts?.giftsPerRound ?? 0} winners)`
+                    ? `✓ Вы можете выиграть (в топе ${gifts?.giftsPerRound ?? 0} победителей)`
+                    : `✗ Вас перебили (нужно быть в топе ${gifts?.giftsPerRound ?? 0} победителей)`
                   }
                 </p>
               </div>
@@ -574,7 +585,7 @@ const AuctionDetailPage = () => {
       {auction.status === 'CREATED' && auction.createdBy === currentUserId && (
         <Card variant="elevated">
           <div className="p-6">
-            <Tooltip content="Start the auction to begin accepting bids">
+            <Tooltip content="Запустить аукцион для начала приема ставок">
               <Button
                 variant="primary"
                 size="lg"
@@ -587,7 +598,7 @@ const AuctionDetailPage = () => {
                   </svg>
                 }
               >
-                Start Auction
+                Запустить аукцион
               </Button>
             </Tooltip>
           </div>
@@ -597,7 +608,7 @@ const AuctionDetailPage = () => {
       {/* Place Bid Form */}
       {auction.status === 'RUNNING' && currentUserId && (
         <div>
-          <h2 className="text-xl font-semibold text-text-primary mb-4">Place Bid</h2>
+          <h2 className="text-xl font-semibold text-text-primary mb-4">Разместить ставку</h2>
           <BidForm
             onSubmit={handlePlaceBid}
             minBid={auction.minBid || 0}

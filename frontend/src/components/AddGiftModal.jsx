@@ -8,15 +8,6 @@ import Button from './ui/Button';
 import Tooltip from './ui/Tooltip';
 import Loading from './ui/Loading';
 
-/**
- * AddGiftModal Component
- * 
- * Модальное окно для добавления подарка в инвентарь пользователя (для тестирования)
- * 
- * @param {boolean} isOpen - Открыто ли модальное окно
- * @param {function} onClose - Callback для закрытия
- * @param {function} onAdded - Callback после успешного добавления
- */
 const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
   const { user } = useAuth();
   const currentUserId = user?.id;
@@ -28,7 +19,6 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Загрузка списка подарков
   useEffect(() => {
     if (isOpen) {
       loadGifts();
@@ -42,13 +32,12 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
       setGifts(giftsData);
     } catch (error) {
       console.error('Error loading gifts:', error);
-      showToast('Failed to load gifts', 'error');
+      showToast('Не удалось загрузить подарки', 'error');
     } finally {
       setLoadingGifts(false);
     }
   };
 
-  // Сброс формы при закрытии
   const handleClose = () => {
     if (!loading) {
       setGiftId('');
@@ -59,14 +48,13 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
     }
   };
 
-  // Валидация отдельного поля
   const validateField = (field, value) => {
     const errors = { ...validationErrors };
     
     switch (field) {
       case 'giftId':
         if (!value || value.trim() === '') {
-          errors.giftId = 'Please select a gift';
+          errors.giftId = 'Пожалуйста, выберите подарок';
         } else {
           delete errors.giftId;
         }
@@ -75,7 +63,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
       case 'bidAmount':
         const amount = parseFloat(value);
         if (isNaN(amount) || amount < 1) {
-          errors.bidAmount = 'Bid amount must be at least 1';
+          errors.bidAmount = 'Сумма ставки должна быть не менее 1';
         } else {
           delete errors.bidAmount;
         }
@@ -86,10 +74,9 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
     return !errors[field];
   };
 
-  // Валидация всей формы
   const validateForm = () => {
     if (!currentUserId) {
-      setError('Please log in to add gifts to inventory');
+      setError('Пожалуйста, войдите в систему для добавления подарков в инвентарь');
       return false;
     }
 
@@ -125,13 +112,13 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
         },
       });
 
-      showToast('Gift added to inventory successfully!', 'success');
+      showToast('Подарок успешно добавлен в инвентарь!', 'success');
       handleClose();
       if (onAdded) {
         onAdded();
       }
     } catch (err) {
-      const errorMsg = err.message || 'Failed to add gift';
+      const errorMsg = err.message || 'Не удалось добавить подарок';
       setError(errorMsg);
       showToast(errorMsg, 'error');
     } finally {
@@ -144,7 +131,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
       isOpen={isOpen}
       onClose={handleClose}
       size="md"
-      title="Add Gift to Inventory"
+      title="Добавить подарок в инвентарь"
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
@@ -155,7 +142,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
             <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>This is a demo function to add gifts to inventory for testing purposes.</span>
+            <span>Это демо-функция для добавления подарков в инвентарь в целях тестирования.</span>
           </div>
         </div>
 
@@ -163,14 +150,14 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
           {/* Gift Selection */}
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-2">
-              Gift <span className="text-status-error">*</span>
+              Подарок <span className="text-status-error">*</span>
             </label>
             {loadingGifts ? (
               <div className="flex items-center justify-center p-8">
                 <Loading.Spinner />
               </div>
             ) : (
-              <Tooltip content="Select a gift to add to your inventory">
+              <Tooltip content="Выберите подарок для добавления в инвентарь">
                 <select
                   value={giftId}
                   onChange={(e) => {
@@ -189,7 +176,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
                       : 'border-border'
                   }`}
                 >
-                  <option value="">Select a gift...</option>
+                  <option value="">Выберите подарок...</option>
                   {gifts.map((gift) => (
                     <option key={gift.id} value={gift.id}>
                       {gift.title}
@@ -204,9 +191,9 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
           </div>
 
           {/* Bid Amount Input */}
-          <Tooltip content="Bid amount for display purposes">
+          <Tooltip content="Сумма ставки для отображения">
             <Input
-              label="Bid Amount (for display)"
+              label="Сумма ставки (для отображения)"
               type="number"
               value={bidAmount}
               onChange={(e) => {
@@ -246,7 +233,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
               onClick={handleClose}
               disabled={loading}
             >
-              Cancel
+              Отмена
             </Button>
             <Button
               type="submit"
@@ -254,7 +241,7 @@ const AddGiftModal = ({ isOpen, onClose, onAdded }) => {
               loading={loading}
               disabled={loading || Object.keys(validationErrors).length > 0 || loadingGifts || !currentUserId}
             >
-              {loading ? 'Adding...' : 'Add to Inventory'}
+              {loading ? 'Добавление...' : 'Добавить в инвентарь'}
             </Button>
           </div>
         </form>

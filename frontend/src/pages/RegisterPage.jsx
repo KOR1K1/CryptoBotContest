@@ -6,11 +6,6 @@ import RegisterForm from '../components/forms/RegisterForm';
 import Button from '../components/ui/Button';
 import Tooltip from '../components/ui/Tooltip';
 
-/**
- * RegisterPage Component
- * 
- * Страница регистрации с новым дизайном
- */
 const RegisterPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -25,14 +20,14 @@ const RegisterPage = () => {
       const result = await register(username, password, email, initialBalance);
 
       if (result.success) {
-        showToast('Registration successful!', 'success');
+        showToast('Регистрация выполнена успешно!', 'success');
         // Redirect to auctions page after successful registration
         navigate('/auctions', { replace: true });
       } else {
-        setError(result.error || 'Registration failed. Please try again.');
+        setError(result.error || 'Ошибка регистрации. Попробуйте еще раз.');
       }
     } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
+      setError('Произошла неожиданная ошибка. Попробуйте еще раз.');
     } finally {
       setLoading(false);
     }
@@ -43,8 +38,8 @@ const RegisterPage = () => {
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-text-primary">Create Account</h1>
-          <p className="text-text-secondary">Sign up to start participating in auctions</p>
+          <h1 className="text-3xl font-bold text-text-primary">Создать аккаунт</h1>
+          <p className="text-text-secondary">Зарегистрируйтесь, чтобы начать участвовать в аукционах</p>
         </div>
 
         {/* Register Form */}
@@ -57,22 +52,22 @@ const RegisterPage = () => {
         {/* Login Link */}
         <div className="text-center">
           <p className="text-text-muted text-sm">
-            Already have an account?{' '}
+            Уже есть аккаунт?{' '}
             <Link
               to="/login"
               className="text-accent-primary hover:text-accent-hover font-medium transition-colors duration-fast"
             >
-              Login here
+              Войдите здесь
             </Link>
           </p>
         </div>
 
         {/* Back to Home Link (optional) */}
         <div className="text-center">
-          <Tooltip content="Return to home page">
+          <Tooltip content="Вернуться на главную страницу">
             <Link to="/">
               <Button variant="ghost" size="sm">
-                ← Back to Home
+                ← На главную
               </Button>
             </Link>
           </Tooltip>

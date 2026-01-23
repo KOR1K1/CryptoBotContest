@@ -88,6 +88,9 @@ cd CryptoBotContest
 # Скопировать .env файл из .env.example
 cp .env.example .env
 
+# Windows PowerShell:
+# Copy-Item .env.example .env
+
 # При необходимости — отредактировать .env
 # (порты, креды, ключи и т.д.)
 

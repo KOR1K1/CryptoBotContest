@@ -3,13 +3,6 @@ import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Tooltip from '../ui/Tooltip';
 
-/**
- * UserBidItem Component
- * 
- * Компонент для отображения ставки пользователя в списке "My Bids"
- * 
- * @param {object} bid - Данные ставки
- */
 const UserBidItem = ({ bid }) => {
   const navigate = useNavigate();
 
@@ -28,8 +21,8 @@ const UserBidItem = ({ bid }) => {
   }[bid.status] || '?';
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    if (!dateString) return 'Н/Д';
+    return new Date(dateString).toLocaleDateString('ru-RU', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -37,8 +30,8 @@ const UserBidItem = ({ bid }) => {
   };
 
   const formatDateTime = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleString();
+    if (!dateString) return 'Н/Д';
+    return new Date(dateString).toLocaleString('ru-RU');
   };
 
   const handleClick = () => {
@@ -55,7 +48,6 @@ const UserBidItem = ({ bid }) => {
       className="transition-all duration-fast"
     >
       <div className="flex items-center gap-4">
-        {/* Status Icon */}
         <div
           className={`w-12 h-12 rounded-lg flex items-center justify-center font-bold text-lg flex-shrink-0 ${
             bid.status === 'WON'
@@ -74,15 +66,18 @@ const UserBidItem = ({ bid }) => {
             <span className="text-2xl font-bold text-text-primary">
               {bid.amount?.toFixed(2) || '0.00'}
             </span>
-            <Tooltip content={`Status: ${bid.status}`}>
+            <Tooltip content={`Статус: ${bid.status === 'WON' ? 'Выиграно' : bid.status === 'ACTIVE' ? 'Активна' : bid.status === 'REFUNDED' ? 'Возвращено' : bid.status === 'LOST' ? 'Проиграно' : bid.status}`}>
               <Badge variant={statusVariant} size="sm">
-                {bid.status}
+                {bid.status === 'WON' ? 'Выиграно' :
+                 bid.status === 'ACTIVE' ? 'Активна' :
+                 bid.status === 'REFUNDED' ? 'Возвращено' :
+                 bid.status === 'LOST' ? 'Проиграно' : bid.status}
               </Badge>
             </Tooltip>
           </div>
           <div className="flex items-center gap-2 text-sm text-text-muted">
             {bid.auctionId && (
-              <Tooltip content={`Click to view auction ${bid.auctionId}`}>
+              <Tooltip content={`Нажмите, чтобы просмотреть аукцион ${bid.auctionId}`}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -90,15 +85,15 @@ const UserBidItem = ({ bid }) => {
                   }}
                   className="text-accent-primary hover:text-accent-hover transition-colors duration-fast"
                 >
-                  Auction: {bid.auctionId.substring(0, 8)}...
+                  Аукцион: {bid.auctionId.substring(0, 8)}...
                 </button>
               </Tooltip>
             )}
             {bid.roundIndex !== undefined && (
               <>
                 <span>•</span>
-                <Tooltip content={`Bid placed in Round ${bid.roundIndex + 1}`}>
-                  <span>Round {bid.roundIndex + 1}</span>
+                <Tooltip content={`Ставка размещена в раунде ${bid.roundIndex + 1}`}>
+                  <span>Раунд {bid.roundIndex + 1}</span>
                 </Tooltip>
               </>
             )}
@@ -109,10 +104,9 @@ const UserBidItem = ({ bid }) => {
           </div>
         </div>
 
-        {/* Action Icon */}
         {bid.auctionId && (
           <div className="flex-shrink-0">
-            <Tooltip content="View auction">
+            <Tooltip content="Просмотреть аукцион">
               <svg className="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>

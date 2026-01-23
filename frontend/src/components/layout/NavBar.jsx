@@ -3,18 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 
-/**
- * NavBar Component
- * 
- * Навигационное меню с горизонтальной навигацией и мобильной версией
- * Использует React Router для навигации
- */
 const NavBar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Определяем текущую страницу на основе location.pathname
   const getCurrentPage = () => {
     if (location.pathname.startsWith('/auctions/')) return 'auction-detail';
     if (location.pathname === '/auctions') return 'auctions';
@@ -29,7 +22,7 @@ const NavBar = () => {
   const pages = [
     { 
       id: 'auctions', 
-      label: 'Auctions',
+      label: 'Аукционы',
       path: '/auctions',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -39,7 +32,7 @@ const NavBar = () => {
     },
     { 
       id: 'inventory', 
-      label: 'Inventory',
+      label: 'Инвентарь',
       path: '/inventory',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,7 +42,7 @@ const NavBar = () => {
     },
     { 
       id: 'user-bids', 
-      label: 'My Bids',
+      label: 'Мои ставки',
       path: '/bids',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,7 +52,7 @@ const NavBar = () => {
     },
     { 
       id: 'bot-simulator', 
-      label: 'Bot Simulator',
+      label: 'Симулятор ботов',
       path: '/bot-simulator',
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -83,7 +76,6 @@ const NavBar = () => {
 
   return (
     <nav className="mb-6">
-      {/* Desktop Navigation */}
       <div className="hidden md:flex items-center gap-2">
         {pages.map((page) => {
           const isActive = isPageActive(page);
@@ -123,10 +115,9 @@ const NavBar = () => {
           }
           className="w-full justify-between"
         >
-          {pages.find(p => isPageActive(p))?.label || 'Menu'}
+          {pages.find(p => isPageActive(p))?.label || 'Меню'}
         </Button>
 
-        {/* Mobile Menu Dropdown */}
         {isMobileMenuOpen && (
           <div className="mt-2 bg-bg-card border border-border rounded-lg overflow-hidden shadow-lg">
             {pages.map((page) => {

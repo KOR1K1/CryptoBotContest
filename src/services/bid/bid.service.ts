@@ -18,24 +18,14 @@ import { AuctionStatus } from '../../common/enums/auction-status.enum';
 import { BalanceService } from '../balance/balance.service';
 import { RedisLockService } from '../redis-lock/redis-lock.service';
 
-/**
- * PlaceBidDto (internal interface for BidService)
- * 
- * Note: userId is now passed as a separate parameter, not in DTO
- * This ensures userId comes from JWT token, not from request body
- */
+// userId передается отдельно, не в DTO, чтобы брать из JWT
 export interface PlaceBidDto {
   auctionId: string;
   amount: number;
   currentRound: number; // Passed from AuctionService to avoid circular dependency
 }
 
-/**
- * PlaceBidBotDto (for bot simulation)
- * 
- * Used for bot endpoints where userId can be provided in body
- * (for testing and simulation purposes)
- */
+// для ботов userId можно в теле запроса
 export interface PlaceBidBotDto {
   userId: string; // Allowed for bots
   auctionId: string;
@@ -43,21 +33,8 @@ export interface PlaceBidBotDto {
   currentRound: number;
 }
 
-/**
- * BidService
- *
- * Handles bid placement and validation
- * Does NOT handle:
- * - Round logic (handled by AuctionService)
- * - Winner selection (handled by AuctionService)
- * - Payouts/refunds (handled by AuctionService)
- *
- * Responsibilities:
- * - Validate bid requirements
- * - Place new bids or increase existing bids
- * - Prevent duplicate active bids
- * - Query active bids
- */
+// работа со ставками
+// не трогает раунды, выбор победителей, выплаты - это в AuctionService
 @Injectable()
 export class BidService {
   private readonly logger = new Logger(BidService.name);
@@ -71,18 +48,8 @@ export class BidService {
     private redisLockService: RedisLockService,
   ) {}
 
-  /**
-   * Validate bid requirements
-   * Checks auction status and minimum bid
-   * Does NOT check balance (balance check is done separately in placeBid to handle existing bids)
-   *
-   * @param auctionId Auction ID
-   * @param userId User ID (for potential future checks)
-   * @param amount Bid amount
-   * @returns Auction document if valid
-   * @throws NotFoundException if auction not found
-   * @throws BadRequestException if validation fails
-   */
+  // проверка требований к ставке
+  // баланс не проверяем здесь, это в placeBid (там учитываются существующие ставки)
   async validateBid(
     auctionId: string,
     userId: string,
@@ -92,7 +59,6 @@ export class BidService {
       throw new BadRequestException('Bid amount must be positive');
     }
 
-    // Check auction exists and is running
     const auction = await this.auctionModel.findById(auctionId).exec();
     if (!auction) {
       throw new NotFoundException(`Auction with ID ${auctionId} not found`);
@@ -104,7 +70,6 @@ export class BidService {
       );
     }
 
-    // Check minimum bid requirement
     if (amount < auction.minBid) {
       throw new BadRequestException(
         `Bid amount ${amount} is below minimum bid ${auction.minBid}`,
@@ -117,14 +82,7 @@ export class BidService {
     return auction;
   }
 
-  /**
-   * Check if user already has an active bid in this auction
-   * Used to prevent duplicate active bids (one ACTIVE bid per user per auction)
-   *
-   * @param userId User ID
-   * @param auctionId Auction ID
-   * @returns Existing active bid if found, null otherwise
-   */
+  // проверяем есть ли уже активная ставка у юзера в этом аукционе
   async preventDuplicateActiveBid(
     userId: string,
     auctionId: string,
@@ -140,72 +98,35 @@ export class BidService {
     return existingBid;
   }
 
-  /**
-   * Place a bid or increase existing bid (for authenticated users)
-   *
-   * Rules:
-   * - If user has no active bid: create new bid
-   * - If user has active bid: increase amount (newAmount > oldAmount)
-   * - All operations are atomic via MongoDB transactions
-   * - Uses BalanceService for fund locking
-   *
-   * OPTIMIZED: All validations are done INSIDE transaction to avoid race conditions
-   * and reduce number of database queries (critical for performance).
-   *
-   * @param userId User ID (from JWT token, not from request body)
-   * @param dto PlaceBidDto with auctionId, amount, currentRound
-   * @returns Created or updated bid document
-   * @throws BadRequestException if validation fails
-   * @throws ConflictException if bid cannot be placed
-   */
+  // размещение или увеличение ставки
+  // если нет активной ставки - создаем, если есть - увеличиваем сумму
+  // все в транзакции для атомарности
   async placeBid(userId: string, dto: PlaceBidDto): Promise<BidDocument> {
     const { auctionId, amount, currentRound } = dto;
 
-    // Retry configuration for transaction conflicts
-    // Optimized for high concurrency: more retries with exponential backoff
-    // Top projects handle 100k+ concurrent bids with 5-10 retries
-    const MAX_RETRIES = 5; // Increased from 3 to 5 for better conflict handling
-    const RETRY_DELAY_MS = 50; // Reduced initial delay for faster retries (was 100ms)
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY_MS = 50;
 
-    // Use Redis lock for user-level concurrency control (optional, falls back to MongoDB transactions)
-    // OPTIMIZED: Only user-level lock (not auction-level) for better performance
     const userLockKey = `user:${userId}`;
-
-    // Try to acquire Redis locks (optional - if Redis unavailable, continue with MongoDB transactions only)
     const useRedisLocks = this.redisLockService.isLockServiceAvailable();
 
     if (useRedisLocks) {
-      // Use Redis lock to prevent concurrent bid operations for same user
-      // OPTIMIZED: Only user lock, not auction lock (MongoDB transactions handle auction-level concurrency)
+      // блокируем только на уровне юзера, не аукциона
       return this.redisLockService.withLock(
         userLockKey,
         async () => {
           return this.executePlaceBidTransaction(userId, dto, null, MAX_RETRIES, RETRY_DELAY_MS);
         },
-        5, // Reduced TTL to 5 seconds for faster release
-        { maxRetries: 1, retryDelayMs: 10 }, // Faster retry
+        5,
+        { maxRetries: 1, retryDelayMs: 10 },
       );
     } else {
-      // Fallback: Use MongoDB transactions only (works fine for most scenarios)
       return this.executePlaceBidTransaction(userId, dto, null, MAX_RETRIES, RETRY_DELAY_MS);
     }
   }
 
-  /**
-   * Execute bid placement transaction (extracted for reuse with/without Redis locks)
-   * 
-   * OPTIMIZED: All validations are done INSIDE transaction to:
-   * 1. Avoid race conditions
-   * 2. Reduce number of database queries (critical for performance)
-   * 3. Ensure atomicity of all checks and operations
-   * 
-   * @param userId User ID (from JWT token)
-   * @param dto PlaceBidDto (without userId)
-   * @param existingBid DEPRECATED: Always pass null, will be checked inside transaction
-   * @param maxRetries Maximum retry attempts
-   * @param retryDelayMs Initial retry delay
-   * @returns Created or updated bid document
-   */
+  // транзакция размещения ставки
+  // все валидации внутри транзакции чтобы избежать race conditions
   private async executePlaceBidTransaction(
     userId: string,
     dto: PlaceBidDto,
@@ -222,13 +143,9 @@ export class BidService {
       try {
         let result: BidDocument;
 
-        // CRITICAL: Set transaction timeout to prevent long-running transactions
-        // Default MongoDB transaction timeout is 60s, but we set it to 5s for faster failure and less blocking
         await session.withTransaction(
           async () => {
-            // ✅ OPTIMIZED: All validations INSIDE transaction (critical for performance)
-          
-          // 1. Validate auction (inside transaction)
+          // все валидации внутри транзакции
           const auction = await this.auctionModel
             .findById(auctionId)
             .session(session)
@@ -250,7 +167,6 @@ export class BidService {
             );
           }
 
-          // 2. Check existing bid (inside transaction)
           const existingBidInTx = await this.bidModel
             .findOne({
               userId,
@@ -260,7 +176,6 @@ export class BidService {
             .session(session)
             .exec();
 
-          // 3. Validate balance (inside transaction)
           const user = await this.userModel
             .findById(userId)
             .session(session)
@@ -270,7 +185,6 @@ export class BidService {
             throw new NotFoundException(`User with ID ${userId} not found`);
           }
 
-          // Calculate amount to check (delta if increasing, full if new)
           const amountToCheck = existingBidInTx
             ? amount - existingBidInTx.amount // Only check additional funds needed
             : amount; // Check full amount for new bid
@@ -283,19 +197,15 @@ export class BidService {
             );
           }
 
-          // 4. Validate amount increase (if existing bid)
           if (existingBidInTx && amount <= existingBidInTx.amount) {
             throw new BadRequestException(
               `New bid amount ${amount} must be greater than existing bid ${existingBidInTx.amount}. Bids can only be increased.`,
             );
           }
 
-          // 5. Execute operation (inside same transaction)
           if (existingBidInTx) {
-            // Increase existing bid
             const delta = amount - existingBidInTx.amount;
 
-            // Lock additional funds
             await this.balanceService.lockFunds(
               userId,
               delta,
@@ -304,7 +214,6 @@ export class BidService {
               session,
             );
 
-            // Update bid
             const updatedBid = await this.bidModel
               .findByIdAndUpdate(
                 existingBidInTx._id,
@@ -327,8 +236,6 @@ export class BidService {
               `Increased bid for user ${userId} in auction ${auctionId}: ${existingBidInTx.amount} -> ${amount}`,
             );
           } else {
-            // Create new bid
-            // OPTIMIZED: Create bid first, then lock funds (bidId needed for reference)
             const createdBid = await this.bidModel.create(
               [
                 {
@@ -348,7 +255,6 @@ export class BidService {
 
             const newBid = createdBid[0];
 
-            // Lock funds (using bidId as reference)
             await this.balanceService.lockFunds(
               userId,
               amount,
@@ -357,7 +263,6 @@ export class BidService {
               session,
             );
 
-            // Fetch the complete bid document
             const fetchedBid = await this.bidModel
               .findById(newBid._id)
               .session(session)
@@ -375,9 +280,6 @@ export class BidService {
           }
         },
         {
-          // CRITICAL: Transaction timeout to prevent blocking
-          // maxTimeMS: 5000 = 5 seconds max transaction time
-          // This prevents long-running transactions from blocking others
           maxTimeMS: 5000,
           readConcern: { level: 'snapshot' },
           writeConcern: { w: 'majority' },
@@ -389,7 +291,6 @@ export class BidService {
         await session.endSession();
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        // Check if error is retryable (transaction conflicts and transient errors)
         const isRetryableError =
           error instanceof Error &&
           (error.message.includes('Write conflict') ||
@@ -451,33 +352,19 @@ export class BidService {
     );
   }
 
-  /**
-   * Get all active bids for an auction
-   * Used by AuctionService for winner selection
-   *
-   * @param auctionId Auction ID
-   * @returns Array of active bid documents, sorted by amount DESC, createdAt ASC
-   */
   async getActiveBidsForAuction(auctionId: string): Promise<BidDocument[]> {
     const activeBids = await this.bidModel
       .find({
         auctionId,
         status: BidStatus.ACTIVE,
       })
-      .sort({ amount: -1, createdAt: 1 }) // amount DESC, createdAt ASC (for tie-breaking)
+      .sort({ amount: -1, createdAt: 1 })
       .exec();
 
     return activeBids;
   }
 
-  /**
-   * Get top N active bids for an auction (optimized for dashboard)
-   * Uses limit to avoid loading all bids into memory
-   *
-   * @param auctionId Auction ID
-   * @param limit Number of top bids to return (default: 3)
-   * @returns Array of top bid documents with user populated, sorted by amount DESC, createdAt ASC
-   */
+  // топ N активных ставок, используем limit чтобы не грузить все
   async getTopActiveBids(
     auctionId: string,
     limit: number = 3,
@@ -494,7 +381,6 @@ export class BidService {
       .limit(limit)
       .exec();
 
-    // Populate user data (attach username for convenience)
     return Promise.all(
       topBids.map(async (bid) => {
         const user = await userModel.findById(bid.userId).exec();
@@ -504,14 +390,7 @@ export class BidService {
     );
   }
 
-  /**
-   * Calculate user position in active bids ranking
-   * Uses MongoDB aggregation for efficient counting
-   *
-   * @param auctionId Auction ID
-   * @param userId User ID
-   * @returns User position (1-based, null if no active bid), user bid amount
-   */
+  // позиция юзера в рейтинге активных ставок
   async getUserPosition(
     auctionId: string,
     userId: string,
@@ -529,8 +408,7 @@ export class BidService {
       return { position: null, amount: null };
     }
 
-    // Count bids that are "better" than user's bid
-    // Better = higher amount OR same amount with earlier createdAt
+    // считаем ставки лучше чем у юзера (больше сумма или та же но раньше создана)
     const betterBidsCount = await this.bidModel.countDocuments({
       auctionId,
       status: BidStatus.ACTIVE,
@@ -543,21 +421,12 @@ export class BidService {
       ],
     });
 
-    // Position is count + 1 (1-based)
     return {
       position: betterBidsCount + 1,
       amount: userBid.amount,
     };
   }
 
-  /**
-   * Get active bid for a specific user in an auction
-   * Helper method for checking user's current bid
-   *
-   * @param userId User ID
-   * @param auctionId Auction ID
-   * @returns Active bid if exists, null otherwise
-   */
   async getUserActiveBid(
     userId: string,
     auctionId: string,
@@ -565,14 +434,6 @@ export class BidService {
     return this.preventDuplicateActiveBid(userId, auctionId);
   }
 
-  /**
-   * Get all bids for a user (across all auctions)
-   * Useful for user history
-   *
-   * @param userId User ID
-   * @param status Optional status filter
-   * @returns Array of bid documents
-   */
   async getUserBids(
     userId: string,
     status?: BidStatus,
@@ -585,13 +446,6 @@ export class BidService {
     return this.bidModel.find(query).sort({ createdAt: -1 }).exec();
   }
 
-  /**
-   * Get bid by ID
-   *
-   * @param bidId Bid ID
-   * @returns Bid document
-   * @throws NotFoundException if bid not found
-   */
   async getBidById(bidId: string): Promise<BidDocument> {
     const bid = await this.bidModel.findById(bidId).exec();
     if (!bid) {

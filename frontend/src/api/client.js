@@ -1,18 +1,28 @@
 import axios from 'axios';
 
-// Browser runs on host, so always use localhost:3000 (backend is exposed on host port 3000)
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// определяем api url динамически по hostname
+// чтобы работало с других устройств в сети
+function getApiBaseUrl() {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  const apiUrl = `${protocol}//${hostname}:3000`;
+  
+  console.log('[API Client] Current hostname:', hostname, 'API URL:', apiUrl);
+  
+  return apiUrl;
+}
 
 export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add token to requests if available
 apiClient.interceptors.request.use(
   (config) => {
+    config.baseURL = getApiBaseUrl();
+    
     const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -24,15 +34,12 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Handle 401 errors (unauthorized) - clear token and redirect to login
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token is invalid or expired
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
-      // Dispatch event for App.jsx to handle redirect
       window.dispatchEvent(new CustomEvent('auth-unauthorized'));
     }
     return Promise.reject(error);
@@ -47,7 +54,14 @@ export const apiRequest = async (endpoint, options = {}) => {
     });
     return response.data;
   } catch (error) {
-    const message = error.response?.data?.message || error.message || 'Request failed';
+    if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+      throw new Error('Network error: Cannot connect to server. Please check if backend is running.');
+    }
+    if (error.response) {
+      const message = error.response?.data?.message || error.response?.data?.error || error.message || 'Request failed';
+      throw new Error(message);
+    }
+    const message = error.message || 'Network error: Request failed';
     throw new Error(message);
   }
 };

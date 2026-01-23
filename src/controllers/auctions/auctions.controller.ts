@@ -34,11 +34,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { UserDocument } from '../../models/user.schema';
 
-/**
- * AuctionsController
- *
- * Handles auction-related API endpoints
- */
+// Контроллер для работы с аукционами
 @ApiTags('Auctions')
 @Controller('auctions')
 export class AuctionsController {
@@ -54,14 +50,8 @@ export class AuctionsController {
     private configService: ConfigService,
   ) {}
 
-  /**
-   * GET /auctions
-   * Get all auctions
-   *
-   * @returns Array of auctions
-   */
   @Get()
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle() // гет-запросы не лимитим
   @ApiOperation({ summary: 'Get all auctions', description: 'Returns a list of all auctions with their current status' })
   @ApiResponse({ status: 200, description: 'List of auctions retrieved successfully' })
   async getAllAuctions() {
@@ -83,13 +73,7 @@ export class AuctionsController {
     }));
   }
 
-  /**
-   * POST /auctions
-   * Create a new auction
-   *
-   * @param dto CreateAuctionDto
-   * @returns Created auction
-   */
+  // создание нового аукциона
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -103,7 +87,6 @@ export class AuctionsController {
     @Body() dto: CreateAuctionDto,
     @CurrentUser() user: UserDocument,
   ) {
-    // Verify gift exists
     const gift = await this.giftModel.findById(dto.giftId).exec();
     if (!gift) {
       throw new NotFoundException('Gift not found');
@@ -118,7 +101,6 @@ export class AuctionsController {
       createdBy: user._id.toString(),
     });
 
-    // Emit WebSocket update to notify all clients about new auction
     this.auctionsGateway.emitAuctionsListUpdate();
 
     return {
@@ -134,13 +116,7 @@ export class AuctionsController {
     };
   }
 
-  /**
-   * POST /auctions/:id/start
-   * Start an auction (create first round, transition to RUNNING)
-   *
-   * @param id Auction ID
-   * @returns Started auction
-   */
+  // запуск аукциона
   @Post(':id/start')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -157,7 +133,6 @@ export class AuctionsController {
   ) {
     const auction = await this.auctionService.startAuction(id, user._id.toString());
     
-    // Emit WebSocket update
     this.auctionsGateway.emitAuctionUpdate(id, auction);
     this.auctionsGateway.emitAuctionsListUpdate();
 
@@ -179,24 +154,11 @@ export class AuctionsController {
     };
   }
 
-  /**
-   * POST /auctions/:id/bids/bot
-   * Place a bid in an auction (for bot simulation)
-   * Special endpoint WITHOUT rate limits for testing and simulation purposes
-   * NOTE: Must be before /auctions/:id/bids to avoid route conflicts
-   *
-   * No rate limiting: This endpoint is specifically for bot simulation and testing.
-   * Allows unlimited bids for testing purposes (load testing, stress testing, etc.)
-   * 
-   * Note: userId is accepted in body for bot simulation (no JWT required)
-   *
-   * @param id Auction ID
-   * @param dto PlaceBidBotDto (with userId in body)
-   * @returns Created/updated bid
-   */
+  // эндпоинт для ботов, без лимитов
+  // должен быть выше /auctions/:id/bids иначе роутинг сломается
   @Post(':id/bids/bot')
   @HttpCode(HttpStatus.CREATED)
-  @SkipThrottle() // Skip rate limiting for bot simulation endpoint
+  @SkipThrottle()
   @ApiOperation({ 
     summary: 'Place a bid (bot simulation)', 
     description: 'Places or updates a bid in the auction. Special endpoint without rate limits for bot simulation and testing. userId is accepted in request body (no JWT required). If user already has an active bid, amount must be higher than current bid.' 
@@ -209,7 +171,6 @@ export class AuctionsController {
     @Param('id', ParseMongoIdPipe) id: string,
     @Body() dto: PlaceBidBotDto,
   ) {
-    // Get current round from auction
     const auction = await this.auctionService.getAuctionById(id);
     const currentRoundData = await this.auctionService.getCurrentRound(id);
 
@@ -217,7 +178,7 @@ export class AuctionsController {
       throw new BadRequestException('Auction has no active round');
     }
 
-    // For bots: userId comes from body
+    // у ботов userId в теле запроса
     const bid = await this.bidService.placeBid(
       dto.userId,
       {
@@ -237,31 +198,18 @@ export class AuctionsController {
       createdAt: bid.createdAt,
     };
 
-    // Invalidate cache for this auction (bid update changes dashboard data)
     await this.invalidateDashboardCache(id);
 
-    // Emit WebSocket update
     this.auctionsGateway.emitBidUpdate(id, bidResponse);
     this.auctionsGateway.emitAuctionsListUpdate();
 
     return bidResponse;
   }
 
-  /**
-   * POST /auctions/:id/bids
-   * Place a bid in an auction
-   * NOTE: Must be before GET routes to avoid conflicts
-   *
-   * Rate limited: 5 bids per second, 20 per 10 seconds (stricter than default)
-   * This prevents bid spamming while allowing legitimate rapid bidding
-   *
-   * @param id Auction ID
-   * @param dto PlaceBidDto
-   * @returns Created/updated bid
-   */
+  // ставка от пользователя, лимит 5/сек и 20/10сек
   @Post(':id/bids')
   @HttpCode(HttpStatus.CREATED)
-  @Throttle({ short: { ttl: 1000, limit: 5 }, medium: { ttl: 10000, limit: 20 } }) // Stricter limits for bids
+  @Throttle({ short: { ttl: 1000, limit: 5 }, medium: { ttl: 10000, limit: 20 } })
   @ApiOperation({ 
     summary: 'Place a bid', 
     description: 'Places or updates a bid in the auction. If user already has an active bid, amount must be higher than current bid.' 
@@ -279,7 +227,6 @@ export class AuctionsController {
     @Body() dto: PlaceBidDto,
     @CurrentUser() user: UserDocument,
   ) {
-    // Get current round from auction
     const auction = await this.auctionService.getAuctionById(id);
     const currentRoundData = await this.auctionService.getCurrentRound(id);
 
@@ -306,34 +253,21 @@ export class AuctionsController {
       createdAt: bid.createdAt,
     };
 
-    // Invalidate cache for this auction (bid update changes dashboard data)
     await this.invalidateDashboardCache(id);
 
-    // Emit WebSocket update
     this.auctionsGateway.emitBidUpdate(id, bidResponse);
     this.auctionsGateway.emitAuctionsListUpdate();
 
     return bidResponse;
   }
 
-  /**
-   * Invalidate dashboard cache for an auction
-   * Called when bid updates occur
-   * 
-   * @param auctionId Auction ID
-   */
+  // сбрасываем кеш дашборда когда ставка обновилась
   private async invalidateDashboardCache(auctionId: string): Promise<void> {
     try {
-      // Invalidate dashboard cache for this auction
-      // Pattern: dashboard:${auctionId}:*
-      // Delete common cache key (dashboard:auctionId:all)
       await this.cacheManager.del(`dashboard:${auctionId}:all`);
-      
-      // Note: For user-specific cache keys, we rely on TTL expiration
-      // (cache expires in 1-5 seconds anyway, so stale data is acceptable for a short period)
-      // For production, could implement pattern-based deletion using Redis directly
+      // юзер-специфичные ключи просто протухнут по TTL, это норм
     } catch (error) {
-      // Log error but don't fail the request (cache invalidation is not critical)
+      // если кеш не сбросился - не критично, протухнет сам
       this.logger.error(
         `Error invalidating dashboard cache for auction ${auctionId}:`,
         error instanceof Error ? error.stack : String(error),
@@ -341,26 +275,18 @@ export class AuctionsController {
     }
   }
 
-  /**
-   * GET /auctions/:id/rounds
-   * Get all rounds for an auction with winner information
-   * NOTE: Must be before /auctions/:id route to avoid route conflicts
-   *
-   * @param id Auction ID
-   * @returns Array of rounds with winners
-   */
+  // все раунды аукциона с победителями
   @Get(':id/rounds')
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   async getAuctionRounds(@Param('id', ParseMongoIdPipe) id: string) {
     const rounds = await this.auctionService.getAuctionRounds(id);
 
-    // Get winners for each closed round
     const roundsWithWinners = await Promise.all(
       rounds.map(async (r) => {
         let winners: any[] = [];
         if (r.closed) {
-          // Get WON bids for this round. Use wonInRoundIndex when set (carry-over winners);
-          // fallback to roundIndex for older records (bid placed and won in same round).
+          // ищем выигравшие ставки, сначала по wonInRoundIndex (если перенеслась из прошлого раунда)
+          // иначе по roundIndex (старые записи где ставка и выигрыш в одном раунде)
           const wonBids = await this.bidModel
             .find({
               auctionId: id,
@@ -384,7 +310,7 @@ export class AuctionsController {
                 username: user?.username || 'Unknown',
                 bidAmount: bid.amount,
                 wonAt: bid.updatedAt || bid.createdAt,
-                placedInRound: bid.roundIndex, // round when bid was placed (for "from Round X" when carry-over)
+                placedInRound: bid.roundIndex, // в каком раунде была сделана ставка (для "из раунда X")
               };
             }),
           );
@@ -407,18 +333,10 @@ export class AuctionsController {
     return roundsWithWinners;
   }
 
-  /**
-   * GET /auctions/:id/bids
-   * Get all bids for an auction (all statuses)
-   * NOTE: Must be before /auctions/:id route to avoid route conflicts
-   *
-   * @param id Auction ID
-   * @returns Array of bids
-   */
+  // все ставки по аукциону
   @Get(':id/bids')
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   async getAuctionBids(@Param('id', ParseMongoIdPipe) id: string) {
-    // Get all bids, not just active ones
     const allBids = await this.bidModel
       .find({ auctionId: id })
       .sort({ amount: -1, createdAt: 1 })
@@ -436,46 +354,29 @@ export class AuctionsController {
     }));
   }
 
-  /**
-   * GET /auctions/:id/dashboard
-   * Get auction dashboard data for frontend display
-   * Includes: top-3 bids, user position, gifts info, timing
-   * NOTE: Must be before /auctions/:id route to avoid conflicts
-   * 
-   * CACHED: Results are cached in Redis for 1-5 seconds (configurable)
-   * Cache key: `dashboard:${auctionId}:${userId || 'all'}`
-   * Cache is invalidated on bid updates and round closures
-   *
-   * @param id Auction ID
-   * @param userId Optional user ID to get user's position
-   * @returns Dashboard data
-   */
+  // данные для дашборда фронтенда
+  // кешируется в редисе на 1-5 сек, сбрасывается при обновлении ставок
   @Get(':id/dashboard')
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe, cached)
+  @SkipThrottle()
   async getAuctionDashboard(
     @Param('id', ParseMongoIdPipe) id: string,
     @Query('userId') userId?: string,
   ) {
-    // Generate cache key (include userId to differentiate cache for different users)
     const cacheKey = `dashboard:${id}:${userId || 'all'}`;
-    const defaultCacheTtl = this.configService.get<number>('cache.ttl.dashboard', 1000); // Base TTL (used for non-running auctions)
+    const defaultCacheTtl = this.configService.get<number>('cache.ttl.dashboard', 1000);
 
-    // Try to get from cache first
     const cached = await this.cacheManager.get<any>(cacheKey);
     if (cached) {
       return cached;
     }
-
-    // Cache miss - fetch from database
     const auction = await this.auctionService.getAuctionById(id);
     const currentRound = await this.auctionService.getCurrentRound(id);
 
-    // Calculate gifts info (works even without active round)
     let giftsInfo;
     try {
       giftsInfo = await this.auctionService.calculateGiftsPerRoundForDisplay(id);
     } catch (error) {
-      // If auction not started yet, use default values
+      // если аукцион еще не начался - дефолтные значения
       giftsInfo = {
         giftsPerRound: Math.ceil(auction.totalGifts / auction.totalRounds),
         remainingGifts: auction.totalGifts,
@@ -483,10 +384,7 @@ export class AuctionsController {
       };
     }
 
-    // Get top-3 active bids with user info (OPTIMIZED: uses limit(3) in query)
     const topBids = await this.bidService.getTopActiveBids(id, 3);
-
-    // Get user info for top bids
     const { User, UserSchema } = await import('../../models/user.schema');
     const userModel = this.giftModel.db.model('User', UserSchema);
 
@@ -499,12 +397,11 @@ export class AuctionsController {
           username: user?.username || 'Unknown',
           amount: bid.amount,
           createdAt: bid.createdAt,
-          roundIndex: bid.roundIndex, // Добавляем roundIndex для отображения
+          roundIndex: bid.roundIndex,
         };
       }),
     );
 
-    // Calculate user position if userId provided (OPTIMIZED: uses aggregation/count)
     let userPosition: {
       position: number | null;
       amount: number | null;
@@ -529,7 +426,6 @@ export class AuctionsController {
       }
     }
 
-    // Calculate timing (only if round exists)
     const now = new Date();
     let timeUntilRoundEnd = 0;
     let totalTimeRemaining = 0;
@@ -570,35 +466,29 @@ export class AuctionsController {
       userPosition,
     };
 
-    // Shorter TTL when RUNNING and no bids yet — bids may be arriving (e.g. bot load test)
     const isRunning = dashboardData.auction?.status === 'RUNNING';
+    const isCompleted = dashboardData.auction?.status === 'COMPLETED';
     const isRunningNoBids = isRunning && (!topBidsWithUsers || topBidsWithUsers.length === 0);
 
-    // More reactive cache for RUNNING auctions: shorter TTL
+    // для активных аукционов кеш короче, для завершенных - длиннее
     let cacheTtl = defaultCacheTtl;
-    if (isRunning) {
-      cacheTtl = 300; // 0.3s for running auctions
+    if (isCompleted) {
+      cacheTtl = 5000;
+    } else if (isRunning) {
+      cacheTtl = 300;
       if (isRunningNoBids) {
-        cacheTtl = 200; // even shorter when no bids yet
+        cacheTtl = 200; // если ставок еще нет - еще короче
       }
     }
-
-    // Save to cache (TTL in milliseconds)
     await this.cacheManager.set(cacheKey, dashboardData, cacheTtl);
 
     return dashboardData;
   }
 
-  /**
-   * GET /auctions/:id
-   * Get auction by ID
-   * NOTE: Must be after specific routes like /auctions/:id/rounds
-   *
-   * @param id Auction ID
-   * @returns Auction data
-   */
+  // получение аукциона по id
+  // должен быть в конце, после всех специфичных роутов
   @Get(':id')
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get auction by ID', description: 'Returns auction details including all rounds' })
   @ApiParam({ name: 'id', description: 'Auction ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Auction retrieved successfully' })

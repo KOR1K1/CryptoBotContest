@@ -2,16 +2,6 @@ import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Tooltip from '../ui/Tooltip';
 
-/**
- * TimerDisplay Component
- * 
- * Компонент для отображения таймеров аукциона
- * 
- * @param {number} timeUntilRoundEnd - Время до конца раунда в миллисекундах
- * @param {number} totalTimeRemaining - Общее оставшееся время в миллисекундах
- * @param {number} roundProgress - Прогресс раунда в процентах (0-100)
- * @param {number} minBid - Минимальная ставка
- */
 const TimerDisplay = ({ 
   timeUntilRoundEnd, 
   totalTimeRemaining, 
@@ -72,7 +62,7 @@ const TimerDisplay = ({
                 <div className={`text-lg font-bold ${isUrgent ? 'text-status-error' : 'text-status-warning'}`}>
                   {formatTime(timeUntilRoundEnd)}
                 </div>
-                <div className="text-xs text-text-muted mt-1">Round Ends</div>
+                <div className="text-xs text-text-muted mt-1">Окончание раунда</div>
               </div>
             </div>
           </div>
@@ -80,26 +70,25 @@ const TimerDisplay = ({
             <Badge variant="error" size="sm">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-status-error rounded-full animate-pulse"></span>
-                Urgent
+                Срочно
               </span>
             </Badge>
           )}
         </div>
 
-        {/* Stats */}
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full lg:w-auto">
-          <Tooltip content="Minimum bid required to participate">
+          <Tooltip content="Минимальная ставка для участия">
             <div className="p-4 bg-bg-secondary rounded-lg border border-border">
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Minimum Bid</div>
+              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Минимальная ставка</div>
               <div className="text-2xl font-bold text-text-primary">
                 {minBid.toFixed(2)}
               </div>
             </div>
           </Tooltip>
 
-          <Tooltip content="Total time remaining for the entire auction">
+          <Tooltip content="Общее оставшееся время для всего аукциона">
             <div className="p-4 bg-bg-secondary rounded-lg border border-border">
-              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Total Remaining</div>
+              <div className="text-xs text-text-muted uppercase tracking-wide mb-1">Осталось всего</div>
               <div className="text-xl font-bold text-accent-primary">
                 {formatTime(totalTimeRemaining)}
               </div>
@@ -107,12 +96,11 @@ const TimerDisplay = ({
           </Tooltip>
         </div>
 
-        {/* Progress Bar */}
         <div className="w-full lg:w-auto lg:flex-1">
-          <Tooltip content={`Round progress: ${Math.round(roundProgress)}%`}>
+          <Tooltip content={`Прогресс раунда: ${Math.round(roundProgress)}%`}>
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-text-muted uppercase tracking-wide">Round Progress</span>
+                <span className="text-xs text-text-muted uppercase tracking-wide">Прогресс раунда</span>
                 <span className="text-xs text-text-secondary">{Math.round(roundProgress)}%</span>
               </div>
               <div className="w-full h-2 bg-bg-tertiary rounded-full overflow-hidden">

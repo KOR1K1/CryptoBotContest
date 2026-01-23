@@ -9,11 +9,6 @@ import Loading from '../components/ui/Loading';
 import Tooltip from '../components/ui/Tooltip';
 import EmptyState from '../components/ui/EmptyState';
 
-/**
- * UserBidsPage Component
- * 
- * Страница со списком ставок пользователя с фильтрацией и улучшенным дизайном
- */
 const UserBidsPage = () => {
   const { user } = useAuth();
   const currentUserId = user?.id;
@@ -35,8 +30,8 @@ const UserBidsPage = () => {
       setBids(bidsData);
     } catch (error) {
       console.error('Error loading bids:', error);
-      setError(error.message || 'Failed to load bids');
-      showToast(`Failed to load bids: ${error.message}`, 'error');
+      setError(error.message || 'Не удалось загрузить ставки');
+      showToast(`Не удалось загрузить ставки: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -50,7 +45,6 @@ const UserBidsPage = () => {
       filtered = filtered.filter(bid => bid.status === statusFilter);
     }
 
-    // Sort by created date (newest first)
     filtered.sort((a, b) => {
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
@@ -62,14 +56,13 @@ const UserBidsPage = () => {
     loadBids();
   }, [currentUserId]);
 
-  // Loading State
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-2">My Bids</h1>
-            <p className="text-text-secondary">Loading your bids...</p>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Мои ставки</h1>
+            <p className="text-text-secondary">Загрузка ваших ставок...</p>
           </div>
         </div>
         <div className="space-y-3">
@@ -92,20 +85,20 @@ const UserBidsPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-2">My Bids</h1>
-            <p className="text-text-secondary">Something went wrong</p>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Мои ставки</h1>
+            <p className="text-text-secondary">Что-то пошло не так</p>
           </div>
         </div>
         <Card variant="elevated" className="p-8 text-center">
           <div className="space-y-4">
             <div className="text-status-error text-6xl">⚠️</div>
-            <h2 className="text-2xl font-semibold text-text-primary">Failed to Load Bids</h2>
+            <h2 className="text-2xl font-semibold text-text-primary">Не удалось загрузить ставки</h2>
             <p className="text-text-secondary">{error}</p>
             <Button
               variant="primary"
               onClick={loadBids}
             >
-              Retry
+              Повторить
             </Button>
           </div>
         </Card>
@@ -118,14 +111,14 @@ const UserBidsPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary mb-2">My Bids</h1>
+          <h1 className="text-3xl font-bold text-text-primary mb-2">Мои ставки</h1>
           <p className="text-text-secondary">
-            {filteredBids.length} {filteredBids.length === 1 ? 'bid' : 'bids'} found
-            {statusFilter !== 'all' && ` (${bids.length} total)`}
+            Найдено {filteredBids.length} {filteredBids.length === 1 ? 'ставка' : filteredBids.length < 5 ? 'ставки' : 'ставок'}
+            {statusFilter !== 'all' && ` (всего ${bids.length})`}
           </p>
         </div>
         
-        <Tooltip content="Refresh bids list">
+        <Tooltip content="Обновить список ставок">
           <Button
             variant="secondary"
             onClick={loadBids}
@@ -135,7 +128,7 @@ const UserBidsPage = () => {
               </svg>
             }
           >
-            Refresh
+            Обновить
           </Button>
         </Tooltip>
       </div>
@@ -145,18 +138,18 @@ const UserBidsPage = () => {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <label className="block text-sm font-medium text-text-secondary mb-2">
-              Filter by Status
+              Фильтр по статусу
             </label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent"
             >
-              <option value="all">All Statuses</option>
-              <option value="WON">Won</option>
-              <option value="ACTIVE">Active</option>
-              <option value="REFUNDED">Refunded</option>
-              <option value="LOST">Lost</option>
+              <option value="all">Все статусы</option>
+              <option value="WON">Выиграно</option>
+              <option value="ACTIVE">Активна</option>
+              <option value="REFUNDED">Возвращено</option>
+              <option value="LOST">Проиграно</option>
             </select>
           </div>
         </div>
@@ -166,20 +159,20 @@ const UserBidsPage = () => {
       {filteredBids.length === 0 ? (
         <EmptyState
           icon="💸"
-          title="No Bids Found"
+          title="Ставки не найдены"
           message={
             statusFilter !== 'all'
-              ? `No bids with status "${statusFilter}" found. Try changing the filter.`
-              : 'You haven\'t placed any bids yet. Participate in an auction to see your bids here!'
+              ? `Ставки со статусом "${statusFilter === 'WON' ? 'Выиграно' : statusFilter === 'ACTIVE' ? 'Активна' : statusFilter === 'REFUNDED' ? 'Возвращено' : 'Проиграно'}" не найдены. Попробуйте изменить фильтр.`
+              : 'Вы еще не делали ставок. Участвуйте в аукционах, чтобы увидеть свои ставки здесь!'
           }
           action={
             statusFilter !== 'all' ? (
-              <Tooltip content="Show all bids regardless of status">
+              <Tooltip content="Показать все ставки независимо от статуса">
                 <Button
                   variant="secondary"
                   onClick={() => setStatusFilter('all')}
                 >
-                  Show All Bids
+                  Показать все ставки
                 </Button>
               </Tooltip>
             ) : null

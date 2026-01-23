@@ -3,13 +3,6 @@ import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Tooltip from '../ui/Tooltip';
 
-/**
- * AuctionCard Component
- * 
- * Карточка аукциона с информацией о подарке, статусе и ставках
- * 
- * @param {object} auction - Данные аукциона
- */
 const AuctionCard = ({ auction }) => {
   const navigate = useNavigate();
 
@@ -22,8 +15,11 @@ const AuctionCard = ({ auction }) => {
 
   const roundInfo =
     auction.status === 'RUNNING'
-      ? `Round ${auction.currentRound + 1}/${auction.totalRounds}`
-      : auction.status;
+      ? `Раунд ${auction.currentRound + 1}/${auction.totalRounds}`
+      : auction.status === 'CREATED' ? 'Создан' :
+        auction.status === 'RUNNING' ? 'Идет' :
+        auction.status === 'FINALIZING' ? 'Завершается' :
+        auction.status === 'COMPLETED' ? 'Завершен' : auction.status;
 
   const handleClick = () => {
     navigate(`/auctions/${auction.id}`);
@@ -41,7 +37,7 @@ const AuctionCard = ({ auction }) => {
         {auction.giftInfo?.imageUrl ? (
           <img
             src={auction.giftInfo.imageUrl}
-            alt={auction.giftInfo.title || 'Auction gift'}
+            alt={auction.giftInfo.title || 'Подарок аукциона'}
             className="w-full h-full object-cover"
             onError={(e) => {
               e.target.style.display = 'none';
@@ -62,7 +58,7 @@ const AuctionCard = ({ auction }) => {
             <Badge variant="success" size="sm">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-status-success rounded-full animate-pulse"></span>
-                LIVE
+                В ЭФИРЕ
               </span>
             </Badge>
           </div>
@@ -71,7 +67,10 @@ const AuctionCard = ({ auction }) => {
         {/* Status Badge */}
         <div className="absolute top-3 left-3">
           <Badge variant={statusVariant} size="sm">
-            {auction.status}
+            {auction.status === 'CREATED' ? 'Создан' :
+             auction.status === 'RUNNING' ? 'Идет' :
+             auction.status === 'FINALIZING' ? 'Завершается' :
+             auction.status === 'COMPLETED' ? 'Завершен' : auction.status}
           </Badge>
         </div>
       </div>
@@ -81,7 +80,7 @@ const AuctionCard = ({ auction }) => {
         {/* Title */}
         <div>
           <h3 className="text-xl font-semibold text-text-primary mb-1 line-clamp-2">
-            {auction.giftInfo?.title || 'Auction'}
+            {auction.giftInfo?.title || 'Аукцион'}
           </h3>
           {auction.giftInfo?.description && (
             <p className="text-sm text-text-muted line-clamp-2">
@@ -92,16 +91,16 @@ const AuctionCard = ({ auction }) => {
 
         {/* Info Grid */}
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <Tooltip content={`Current round: ${auction.currentRound + 1} of ${auction.totalRounds}`}>
+          <Tooltip content={`Текущий раунд: ${auction.currentRound + 1} из ${auction.totalRounds}`}>
             <div className="flex flex-col">
-              <span className="text-text-muted text-xs uppercase tracking-wide">Round</span>
+              <span className="text-text-muted text-xs uppercase tracking-wide">Раунд</span>
               <span className="text-text-primary font-medium">{roundInfo}</span>
             </div>
           </Tooltip>
 
-          <Tooltip content={`Total gifts available in this auction`}>
+          <Tooltip content={`Всего подарков доступно в этом аукционе`}>
             <div className="flex flex-col">
-              <span className="text-text-muted text-xs uppercase tracking-wide">Gifts</span>
+              <span className="text-text-muted text-xs uppercase tracking-wide">Подарки</span>
               <span className="text-text-primary font-medium">{auction.totalGifts}</span>
             </div>
           </Tooltip>
@@ -110,7 +109,7 @@ const AuctionCard = ({ auction }) => {
         {/* Min Bid */}
         <div className="pt-3 border-t border-border">
           <div className="flex items-center justify-between">
-            <span className="text-text-muted text-sm">Min Bid</span>
+            <span className="text-text-muted text-sm">Мин. ставка</span>
             <span className="text-text-primary font-semibold">{auction.minBid.toFixed(2)}</span>
           </div>
         </div>
@@ -118,9 +117,9 @@ const AuctionCard = ({ auction }) => {
         {/* Max Bid (if exists) */}
         {auction.maxBid > 0 && (
           <div className="p-4 bg-accent-primary/10 border border-accent-primary/30 rounded-lg">
-            <Tooltip content="Current highest bid in this auction">
+            <Tooltip content="Текущая максимальная ставка в этом аукционе">
               <div className="flex flex-col">
-                <span className="text-text-muted text-xs uppercase tracking-wide mb-1">Current Max Bid</span>
+                <span className="text-text-muted text-xs uppercase tracking-wide mb-1">Текущая макс. ставка</span>
                 <span className="text-accent-primary text-2xl font-bold">
                   {auction.maxBid.toFixed(2)}
                 </span>

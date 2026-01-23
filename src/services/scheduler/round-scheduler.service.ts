@@ -14,24 +14,8 @@ import { AuctionService } from '../auction/auction.service';
 import { AuctionsGateway } from '../../gateways/auctions.gateway';
 import { BidUpdateThrottlerService } from '../throttler/bid-update-throttler.service';
 
-/**
- * RoundScheduler
- *
- * Background job service for automatically closing auction rounds
- *
- * Features:
- * - Restart-safe: checks persisted round state from MongoDB
- * - Idempotent: safe to retry (checks if round is already closed)
- * - Retry logic: handles failures gracefully
- * - No setTimeout: uses cron jobs that check database state
- *
- * Strategy:
- * - Polls database periodically for rounds that should be closed
- * - Checks endsAt <= now && closed === false
- * - Closes round via AuctionService.closeCurrentRound()
- * - Advances to next round if not last round
- * - Finalizes auction if last round
- */
+// автоматическое закрытие раундов через cron
+// перезапуск-безопасно, идемпотентно, с retry логикой
 @Injectable()
 export class RoundSchedulerService implements OnModuleInit {
   private readonly logger = new Logger(RoundSchedulerService.name);
@@ -53,10 +37,6 @@ export class RoundSchedulerService implements OnModuleInit {
     private cacheManager: Cache | null,
   ) {}
 
-  /**
-   * Called when module initializes
-   * Logs scheduler startup and recovers stuck auctions
-   */
   async onModuleInit() {
     this.logger.log({
       action: 'scheduler-initialized',
@@ -66,11 +46,6 @@ export class RoundSchedulerService implements OnModuleInit {
       retryDelayMs: this.RETRY_DELAY_MS,
     }, 'RoundScheduler initialized');
 
-    // Recover stuck auctions on startup
-    // This handles cases where:
-    // 1. Auction is RUNNING but all rounds are completed
-    // 2. Last round is closed but auction is not finalized
-    // 3. Rounds are overdue and should be closed
     try {
       await this.recoverStuckAuctions();
     } catch (error) {
@@ -81,25 +56,10 @@ export class RoundSchedulerService implements OnModuleInit {
     }
   }
 
-  /**
-   * Get cron interval description for logging
-   */
   private getCronInterval(): string {
-    // CronExpression.EVERY_SECOND = '* * * * * *'
-    // Runs every 1 second for fast response on short auctions
     return '1';
   }
 
-  /**
-   * Main cron job: checks for rounds that should be closed
-   * Runs every 1 second for fast response on short auctions (30s, 1min, etc.)
-   *
-   * Strategy:
-   * 1. Find all unclosed rounds where endsAt <= now
-   * 2. For each round, attempt to close it
-   * 3. Handle errors with retry logic
-   * 4. Advance to next round or finalize auction
-   */
   @Cron(CronExpression.EVERY_SECOND, {
     name: 'close-rounds',
   })
@@ -129,7 +89,6 @@ export class RoundSchedulerService implements OnModuleInit {
         return;
       }
 
-      // Structured log for found rounds
       this.logger.log({
         job: 'close-rounds',
         action: 'check',
@@ -144,7 +103,6 @@ export class RoundSchedulerService implements OnModuleInit {
         timestamp: now.toISOString(),
       }, `Found ${roundsToClose.length} round(s) that should be closed`);
 
-      // Process each round
       let processed = 0;
       let failed = 0;
       for (const round of roundsToClose) {
@@ -186,12 +144,7 @@ export class RoundSchedulerService implements OnModuleInit {
     }
   }
 
-  /**
-   * Process closing of a single round
-   * Includes retry logic and error handling
-   *
-   * @param round Round to close
-   */
+  // закрытие одного раунда с retry логикой
   private async processRoundClosing(
     round: AuctionRoundDocument,
   ): Promise<void> {
@@ -200,8 +153,7 @@ export class RoundSchedulerService implements OnModuleInit {
     const roundId = round._id.toString();
     const processStartTime = new Date();
 
-    // Structured log: starting round processing
-    this.logger.log({
+      this.logger.log({
       action: 'process-round-start',
       roundId,
       auctionId,
@@ -315,14 +267,7 @@ export class RoundSchedulerService implements OnModuleInit {
     // Don't throw - allow next cron run to retry again
   }
 
-  /**
-   * Close round with idempotency check
-   *
-   * @param auctionId Auction ID
-   * @param attempt Attempt number (for logging)
-   * @param roundIndex Round index (for logging)
-   * @param roundId Round ID (for logging)
-   */
+  // закрытие раунда с проверкой идемпотентности
   private async closeRoundWithRetry(
     auctionId: string,
     attempt: number,
@@ -331,7 +276,6 @@ export class RoundSchedulerService implements OnModuleInit {
   ): Promise<void> {
     const closeStartTime = new Date();
     try {
-      // Close current round (idempotent - checks if already closed)
       this.logger.log({
         action: 'close-round-start',
         auctionId,
@@ -347,10 +291,8 @@ export class RoundSchedulerService implements OnModuleInit {
         await this.bidUpdateThrottler.forceFlush(auctionId);
       }
 
-      // Invalidate dashboard cache for this auction (round closure changes dashboard data)
       await this.invalidateDashboardCache(auctionId);
 
-      // Emit WebSocket update for round closure (immediate, not throttled)
       this.auctionsGateway.emitRoundClosed(
         auctionId,
         {
@@ -369,7 +311,6 @@ export class RoundSchedulerService implements OnModuleInit {
       this.auctionsGateway.emitAuctionUpdate(auctionId, await this.auctionService.getAuctionById(auctionId));
       this.auctionsGateway.emitAuctionsListUpdate();
 
-      // Structured log: round closed successfully
       this.logger.log({
         action: 'close-round-success',
         auctionId,
@@ -385,11 +326,7 @@ export class RoundSchedulerService implements OnModuleInit {
         durationMs: new Date().getTime() - closeStartTime.getTime(),
       }, `Successfully closed round ${roundIndex} for auction ${auctionId} (attempt ${attempt}). Winners: ${result.winners.length}`);
 
-      // Check if this was the last round OR if all gifts have been awarded
-      // CRITICAL: Use roundIndex from the round we just closed, not auction.currentRound
-      // because currentRound may have been incremented by advanceRound() already
       const auction = await this.auctionService.getAuctionById(auctionId);
-      // roundIndex is 0-based, totalRounds is count (1-based)
       // Last round index = totalRounds - 1
       const wasLastRound = roundIndex === auction.totalRounds - 1;
 
@@ -508,21 +445,11 @@ export class RoundSchedulerService implements OnModuleInit {
     }
   }
 
-  /**
-   * Helper: sleep for specified milliseconds
-   *
-   * @param ms Milliseconds to sleep
-   */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * Manual trigger for closing rounds (for testing/admin)
-   * Checks for overdue rounds and processes them
-   *
-   * @returns Number of rounds processed
-   */
+  // ручной триггер закрытия раундов (для тестов/админки)
   async triggerRoundClosing(): Promise<number> {
     this.logger.log('Manual trigger for round closing');
     const now = new Date();
@@ -551,12 +478,6 @@ export class RoundSchedulerService implements OnModuleInit {
     return processed;
   }
 
-  /**
-   * Get status of scheduler
-   * Returns information about overdue rounds
-   *
-   * @returns Scheduler status
-   */
   async getSchedulerStatus(): Promise<{
     overdueRounds: number;
     runningAuctions: number;
@@ -588,13 +509,7 @@ export class RoundSchedulerService implements OnModuleInit {
     };
   }
 
-  /**
-   * Recover stuck auctions on startup
-   * Checks all RUNNING auctions and ensures they are in correct state
-   * - Closes overdue rounds
-   * - Finalizes auctions where all rounds are completed
-   * - Handles auctions stuck in FINALIZING state
-   */
+  // восстановление зависших аукционов при старте
   private async recoverStuckAuctions(): Promise<void> {
     this.logger.log({
       action: 'recovery-start',
@@ -605,7 +520,6 @@ export class RoundSchedulerService implements OnModuleInit {
     let finalizedCount = 0;
 
     try {
-      // Find all RUNNING auctions
       const runningAuctions = await this.auctionModel
         .find({
           status: AuctionStatus.RUNNING,
@@ -764,7 +678,6 @@ export class RoundSchedulerService implements OnModuleInit {
         }
       }
 
-      // Also check for auctions stuck in FINALIZING state
       const finalizingAuctions = await this.auctionModel
         .find({
           status: AuctionStatus.FINALIZING,
@@ -852,21 +765,13 @@ export class RoundSchedulerService implements OnModuleInit {
     }
   }
 
-  /**
-   * Invalidate dashboard cache for an auction
-   * Called when round closures occur or auction finalizes
-   * 
-   * @param auctionId Auction ID
-   */
+  // сброс кеша дашборда при закрытии раунда или завершении аукциона
   private async invalidateDashboardCache(auctionId: string): Promise<void> {
     if (!this.cacheManager) {
-      return; // Cache not available (optional dependency)
+      return;
     }
 
     try {
-      // Invalidate dashboard cache for this auction
-      // Pattern: dashboard:${auctionId}:*
-      // Delete common cache key (dashboard:auctionId:all)
       await this.cacheManager.del(`dashboard:${auctionId}:all`);
       
       // Try to get Redis client from cache manager to delete pattern-based keys

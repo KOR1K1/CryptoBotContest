@@ -27,7 +27,7 @@ export interface CreateAuctionDto {
   totalRounds: number;
   roundDurationMs: number;
   minBid: number;
-  createdBy: string; // User ID who creates the auction
+  createdBy: string; // id пользователя который создал аукцион
 }
 
 export interface WinnerResult {
@@ -37,18 +37,9 @@ export interface WinnerResult {
   roundIndex: number;
 }
 
-/**
- * AuctionService
- *
- * Core business logic for auction management:
- * - Auction lifecycle (start, rounds, finalize)
- * - Winner selection (deterministic algorithm)
- * - Round management
- * - Bid carry-over between rounds
- *
- * Does NOT directly mutate balances - uses BalanceService
- * Does NOT place bids - uses BidService
- */
+// основная логика аукционов
+// не трогает балансы напрямую - через BalanceService
+// не ставит ставки - через BidService
 @Injectable()
 export class AuctionService {
   private readonly logger = new Logger(AuctionService.name);
@@ -64,17 +55,10 @@ export class AuctionService {
     private redisLockService: RedisLockService,
   ) {}
 
-  /**
-   * Create a new auction
-   * Auction is created in CREATED status and must be started separately
-   *
-   * @param dto CreateAuctionDto
-   * @returns Created auction document
-   */
+  // создание аукциона, статус CREATED, нужно отдельно запускать
   async createAuction(dto: CreateAuctionDto): Promise<AuctionDocument> {
     const { giftId, totalGifts, totalRounds, roundDurationMs, minBid, createdBy } = dto;
 
-    // Validate parameters
     if (totalGifts <= 0 || totalRounds <= 0) {
       throw new BadRequestException(
         'totalGifts and totalRounds must be positive',
@@ -111,15 +95,8 @@ export class AuctionService {
     return auction;
   }
 
-  /**
-   * Start an auction
-   * Creates the first round and transitions auction to RUNNING status
-   * Only the creator of the auction can start it
-   *
-   * @param auctionId Auction ID
-   * @param userId User ID attempting to start the auction (must be the creator)
-   * @returns Started auction document
-   */
+  // запуск аукциона, создает первый раунд
+  // только создатель может запустить
   async startAuction(auctionId: string, userId: string): Promise<AuctionDocument> {
     const session = await this.connection.startSession();
 
@@ -127,7 +104,6 @@ export class AuctionService {
       let result: AuctionDocument;
 
       await session.withTransaction(async () => {
-        // Find auction
         const auction = await this.auctionModel
           .findById(auctionId)
           .session(session)
@@ -137,7 +113,6 @@ export class AuctionService {
           throw new NotFoundException(`Auction ${auctionId} not found`);
         }
 
-        // Check if user is the creator
         if (auction.createdBy.toString() !== userId) {
           throw new BadRequestException(
             'Only the creator of the auction can start it',
@@ -150,10 +125,7 @@ export class AuctionService {
           );
         }
 
-        // Calculate gifts per round
         const giftsPerRound = Math.ceil(auction.totalGifts / auction.totalRounds);
-
-        // Create first round
         const now = new Date();
         const roundEndsAt = new Date(now.getTime() + auction.roundDurationMs);
 
@@ -171,7 +143,6 @@ export class AuctionService {
           { session },
         );
 
-        // Update auction status
         const updatedAuction = await this.auctionModel
           .findByIdAndUpdate(
             auctionId,
@@ -217,34 +188,21 @@ export class AuctionService {
     }
   }
 
-  /**
-   * Calculate winners for current round
-   * Deterministic algorithm: sort by amount DESC, createdAt ASC
-   *
-   * @param auctionId Auction ID
-   * @param currentRound Round index
-   * @param giftsPerRound Number of gifts to award
-   * @param session Optional MongoDB session (for transaction consistency)
-   * @returns Array of winner bid documents
-   */
+  // определяем победителей: сортировка по сумме DESC, потом по времени ASC
+  // используем limit чтобы не грузить все ставки в память
   async calculateWinners(
     auctionId: string,
     currentRound: number,
     giftsPerRound: number,
     session?: ClientSession,
   ): Promise<BidDocument[]> {
-    // CRITICAL PERFORMANCE FIX: Use .limit() instead of loading all bids
-    // For millions of bids, loading all into memory is impossible
-    // MongoDB will use index { auctionId: 1, status: 1, amount: -1, createdAt: 1 } efficiently
-    // Only load the top N winners directly from database
-    
     const winners = await this.bidModel
       .find({
         auctionId,
         status: BidStatus.ACTIVE,
       })
-      .sort({ amount: -1, createdAt: 1 }) // amount DESC, createdAt ASC (for tie-breaking)
-      .limit(giftsPerRound) // CRITICAL: Only load top N, not all bids
+      .sort({ amount: -1, createdAt: 1 })
+      .limit(giftsPerRound)
       .session(session || null)
       .exec();
 
@@ -253,12 +211,6 @@ export class AuctionService {
       return [];
     }
 
-    // Sorting ensures deterministic ordering:
-    // - amount DESC (highest first)
-    // - createdAt ASC (earliest first for tie-breaking)
-    // Same inputs → same results (deterministic)
-    // MongoDB handles sorting + limit efficiently using index
-
     this.logger.log(
       `Calculated ${winners.length} winners for auction ${auctionId}, round ${currentRound} (out of top ${giftsPerRound} requested)`,
     );
@@ -266,20 +218,12 @@ export class AuctionService {
     return winners;
   }
 
-  /**
-   * Close current round
-   * Selects winners, marks them as WON, processes payouts
-   * 
-   * Uses Redis lock for distributed locking (optional, falls back to MongoDB transactions)
-   *
-   * @param auctionId Auction ID
-   * @returns Closed round document and winners
-   */
+  // закрытие раунда: выбираем победителей, помечаем WON, выплачиваем
+  // используем redis lock если доступен, иначе просто транзакции
   async closeCurrentRound(auctionId: string): Promise<{
     round: AuctionRoundDocument;
     winners: WinnerResult[];
   }> {
-    // Use Redis lock for round closing (prevents concurrent round closures across instances)
     const roundLockKey = `round:${auctionId}`;
     const useRedisLocks = this.redisLockService.isLockServiceAvailable();
 
@@ -289,21 +233,15 @@ export class AuctionService {
         async () => {
           return this.executeCloseRoundTransaction(auctionId);
         },
-        60, // 60 seconds TTL (round closing can take time with many bids)
+        60, // таймаут 60 сек, закрытие может долго идти если ставок много
         { maxRetries: 1, retryDelayMs: 500 },
       );
     } else {
-      // Fallback: Use MongoDB transactions only
       return this.executeCloseRoundTransaction(auctionId);
     }
   }
 
-  /**
-   * Execute round closing transaction (extracted for reuse with/without Redis locks)
-   * 
-   * @param auctionId Auction ID
-   * @returns Closed round document and winners
-   */
+  // сама транзакция закрытия раунда
   private async executeCloseRoundTransaction(auctionId: string): Promise<{
     round: AuctionRoundDocument;
     winners: WinnerResult[];
@@ -317,7 +255,6 @@ export class AuctionService {
       };
 
       await session.withTransaction(async () => {
-        // Find auction and current round
         const auction = await this.auctionModel
           .findById(auctionId)
           .session(session)
@@ -353,12 +290,8 @@ export class AuctionService {
           );
         }
 
-        // Calculate gifts per round
-        // Important: Rounds are for anti-sniping only. Total gifts to award = totalGifts.
-        // We never award more than totalGifts across all rounds.
         const isLastRound = auction.currentRound === auction.totalRounds - 1;
-        
-        // Calculate how many gifts were already awarded in previous rounds
+        // раунды только для анти-снайпинга, всего подарков = totalGifts, никогда не больше
         const previousRounds = await this.auctionRoundModel
           .find({
             auctionId,
@@ -375,9 +308,8 @@ export class AuctionService {
 
         const remainingGifts = auction.totalGifts - alreadyAwarded;
         
-        // If all gifts already awarded, no more winners in this round
         if (remainingGifts <= 0) {
-          // Close round with 0 winners
+          // все подарки уже вручены, закрываем раунд без победителей
           const updatedRound = await this.auctionRoundModel
             .findByIdAndUpdate(
               currentRound._id,
@@ -394,11 +326,9 @@ export class AuctionService {
             throw new InternalServerErrorException('Failed to close round');
           }
 
-          // If all gifts are awarded, auction should be finalized
-          // This can happen if gifts were awarded in previous rounds
-          // Note: We don't finalize here because this method only closes rounds
-          // The scheduler will detect this and finalize the auction
-          // But we mark the auction for finalization by checking in the scheduler
+          // если все подарки уже вручены - аукцион нужно завершить
+          // но не делаем это здесь, только закрываем раунд
+          // scheduler сам проверит и завершит
           
           result = {
             round: updatedRound,
@@ -409,16 +339,11 @@ export class AuctionService {
         
         let giftsPerRound: number;
         if (isLastRound) {
-          // For last round, award all remaining gifts
           giftsPerRound = remainingGifts;
         } else {
-          // For non-last rounds, use even distribution but never exceed remaining gifts
-          // This ensures we don't award more than totalGifts total
           const baseGiftsPerRound = Math.ceil(auction.totalGifts / auction.totalRounds);
           giftsPerRound = Math.min(baseGiftsPerRound, remainingGifts);
         }
-
-        // Calculate winners (within transaction for consistency)
         const winnerBids = await this.calculateWinners(
           auctionId,
           auction.currentRound,
@@ -426,10 +351,9 @@ export class AuctionService {
           session,
         );
 
-        // Mark winners as WON and process payouts
         const winners: WinnerResult[] = [];
         for (const bid of winnerBids) {
-          // Idempotency check: verify bid is still ACTIVE (may have been processed already)
+          // проверяем что ставка еще ACTIVE (идемпотентность)
           const currentBid = await this.bidModel
             .findById(bid._id)
             .session(session)
@@ -446,7 +370,7 @@ export class AuctionService {
             this.logger.warn(
               `Bid ${bid._id} is already ${currentBid.status}, skipping payout (idempotency)`,
             );
-            // Bid already processed, add to winners list but skip payout
+            // уже обработана, добавляем в список но выплату пропускаем
             winners.push({
               bidId: bid._id.toString(),
               userId: bid.userId.toString(),
@@ -456,7 +380,8 @@ export class AuctionService {
             continue;
           }
 
-          // Update bid status to WON and record the round it won in (for carry-over: roundIndex=placed, wonInRoundIndex=won)
+          // помечаем ставку WON, записываем раунд выигрыша
+          // roundIndex - где сделана ставка, wonInRoundIndex - где выиграла
           const updatedBid = await this.bidModel
             .findByIdAndUpdate(
               bid._id,
@@ -475,13 +400,12 @@ export class AuctionService {
             );
           }
 
-          // Process payout (deduct from locked balance)
-          // Winner pays for the gift - funds are deducted from lockedBalance
-          // Use bidId as referenceId for idempotency (each bid paid once)
+          // выплата - списываем с lockedBalance
+          // bidId как referenceId для идемпотентности
           await this.balanceService.payout(
             bid.userId.toString(),
             bid.amount,
-            bid._id.toString(), // Use bidId as referenceId for idempotency
+            bid._id.toString(),
             `Payout for winning bid in round ${auction.currentRound}`,
             session,
           );
@@ -494,7 +418,6 @@ export class AuctionService {
           });
         }
 
-        // Update round as closed
         const updatedRound = await this.auctionRoundModel
           .findByIdAndUpdate(
             currentRound._id,
@@ -543,14 +466,8 @@ export class AuctionService {
     }
   }
 
-  /**
-   * Advance to next round
-   * Creates new round and updates auction currentRound
-   * Active bids (non-winners) automatically carry over
-   *
-   * @param auctionId Auction ID
-   * @returns Updated auction and new round
-   */
+  // переход к следующему раунду
+  // активные ставки (не выигравшие) переносятся автоматически
   async advanceRound(auctionId: string): Promise<{
     auction: AuctionDocument;
     round: AuctionRoundDocument;
@@ -587,8 +504,7 @@ export class AuctionService {
           );
         }
 
-        // Update roundIndex for all active bids (carry-over)
-        // This marks them as participating in the new round
+        // обновляем roundIndex у всех активных ставок (перенос в новый раунд)
         await this.bidModel
           .updateMany(
             {
@@ -605,7 +521,6 @@ export class AuctionService {
           )
           .exec();
 
-        // Create new round
         const now = new Date();
         const roundEndsAt = new Date(now.getTime() + auction.roundDurationMs);
 
@@ -627,7 +542,6 @@ export class AuctionService {
           throw new InternalServerErrorException('Failed to create new round');
         }
 
-        // Update auction currentRound
         const updatedAuction = await this.auctionModel
           .findByIdAndUpdate(
             auctionId,
@@ -674,13 +588,8 @@ export class AuctionService {
     }
   }
 
-  /**
-   * Finalize auction after last round
-   * Closes the last round if not closed, then refunds all remaining active bids
-   *
-   * @param auctionId Auction ID
-   * @returns Finalized auction document
-   */
+  // завершение аукциона после последнего раунда
+  // закрывает последний раунд если не закрыт, возвращает деньги за оставшиеся ставки
   async finalizeAuction(auctionId: string): Promise<AuctionDocument> {
     const session = await this.connection.startSession();
 
@@ -698,7 +607,6 @@ export class AuctionService {
         }
 
         if (auction.status === AuctionStatus.COMPLETED) {
-          // Already finalized, return as-is
           result = auction;
           return;
         }
@@ -712,7 +620,6 @@ export class AuctionService {
           );
         }
 
-        // Check if last round is closed, if not - close it first
         const currentRound = await this.auctionRoundModel
           .findOne({
             auctionId,
@@ -722,10 +629,8 @@ export class AuctionService {
           .exec();
 
         if (currentRound && !currentRound.closed) {
-          // Close the last round first
           const isLastRound = auction.currentRound === auction.totalRounds - 1;
           if (isLastRound) {
-            // Calculate remaining gifts for last round
             const previousRounds = await this.auctionRoundModel
               .find({
                 auctionId,
@@ -749,9 +654,8 @@ export class AuctionService {
               session,
             );
 
-            // Mark winners and process payouts (idempotent)
             for (const bid of winnerBids) {
-              // Idempotency check: verify bid is still ACTIVE
+              // проверяем что ставка еще ACTIVE (идемпотентность)
               const currentBid = await this.bidModel
                 .findById(bid._id)
                 .session(session)
@@ -766,7 +670,6 @@ export class AuctionService {
                 continue;
               }
 
-              // Update bid status to WON and record wonInRoundIndex (for /auctions/:id/rounds)
               await this.bidModel
                 .findByIdAndUpdate(
                   bid._id,
@@ -779,17 +682,16 @@ export class AuctionService {
                 )
                 .exec();
 
-              // Process payout (use bidId as referenceId for idempotency)
+              // выплата, bidId как referenceId для идемпотентности
               await this.balanceService.payout(
                 bid.userId.toString(),
                 bid.amount,
-                bid._id.toString(), // Use bidId for idempotency
+                bid._id.toString(),
                 `Payout for winning bid in final round ${auction.currentRound}`,
                 session,
               );
             }
 
-            // Close the round
             await this.auctionRoundModel
               .findByIdAndUpdate(
                 currentRound._id,
@@ -804,9 +706,7 @@ export class AuctionService {
           }
         }
 
-        // Transition to FINALIZING if not already
-        // Note: auction.status can be RUNNING or FINALIZING at this point
-        // If RUNNING, transition to FINALIZING; if already FINALIZING, keep it
+        // переводим в FINALIZING если еще не там
         if (auction.status === AuctionStatus.RUNNING) {
           await this.auctionModel
             .findByIdAndUpdate(
@@ -818,33 +718,27 @@ export class AuctionService {
             )
             .exec();
         }
-        // If already FINALIZING, no need to update (idempotency)
 
-        // CRITICAL PERFORMANCE FIX: Use batch processing for refunds
-        // Instead of loading all millions of bids, process in batches using cursor
-        // This prevents memory exhaustion and allows for better transaction handling
-        
-        const BATCH_SIZE = 1000; // Process 1000 bids at a time
+        // обрабатываем возвраты батчами чтобы не грузить миллионы ставок в память
+        const BATCH_SIZE = 1000;
         let refundedCount = 0;
         let hasMore = true;
         let lastBidId: string | null = null;
 
         while (hasMore) {
-          // Build query: get next batch of active bids
           const query: any = {
             auctionId,
             status: BidStatus.ACTIVE,
           };
           
-          // Use cursor pagination for efficient batching
+          // курсорная пагинация для батчей
           if (lastBidId) {
             query._id = { $gt: lastBidId };
           }
 
-          // Get batch of bids to process
           const activeBidsBatch = await this.bidModel
             .find(query)
-            .sort({ _id: 1 }) // Sort by _id for cursor pagination
+            .sort({ _id: 1 })
             .limit(BATCH_SIZE)
             .session(session)
             .exec();
@@ -854,9 +748,8 @@ export class AuctionService {
             break;
           }
 
-          // Process batch
           for (const bid of activeBidsBatch) {
-            // Idempotency check: verify bid is still ACTIVE (may have been processed by another instance)
+            // проверяем что ставка еще ACTIVE (может быть обработана другим инстансом)
             const currentBid = await this.bidModel
               .findOne({
                 _id: bid._id,
@@ -867,12 +760,12 @@ export class AuctionService {
               .exec();
 
             if (!currentBid) {
-              // Bid already processed or deleted, skip (idempotency)
+              // уже обработана или удалена, пропускаем
               this.logger.debug(`Bid ${bid._id} not found or already processed, skipping refund`);
               continue;
             }
 
-            // Mark bid as REFUNDED first (atomically) to prevent double processing
+            // помечаем REFUNDED атомарно чтобы не обработать дважды
             const updatedBid = await this.bidModel
               .findByIdAndUpdate(
                 bid._id,
@@ -885,16 +778,16 @@ export class AuctionService {
               .exec();
 
             if (!updatedBid) {
-              // Another process might have updated it, skip (idempotency)
+              // другой процесс мог обновить, пропускаем
               this.logger.debug(`Bid ${bid._id} update failed (may be processed already), skipping refund`);
               continue;
             }
 
-            // Process refund (use bidId as referenceId for idempotency)
+            // возврат, bidId как referenceId - один возврат на ставку
             await this.balanceService.refund(
               bid.userId.toString(),
               bid.amount,
-              bid._id.toString(), // Use bidId as referenceId - one refund per bid
+              bid._id.toString(),
               `Refund for non-winning bid after auction completion`,
               session,
             );
@@ -903,12 +796,11 @@ export class AuctionService {
             lastBidId = bid._id.toString();
           }
 
-          // If batch was smaller than BATCH_SIZE, we're done
           if (activeBidsBatch.length < BATCH_SIZE) {
             hasMore = false;
           }
 
-          // Log progress for large refunds
+          // логируем прогресс для больших возвратов
           if (refundedCount % 10000 === 0) {
             this.logger.log(
               `Processed ${refundedCount} refunds for auction ${auctionId} (batch processing)`,
@@ -920,7 +812,6 @@ export class AuctionService {
           `Completed refund processing for auction ${auctionId}: ${refundedCount} bids refunded`,
         );
 
-        // Mark auction as COMPLETED
         const finalizedAuction = await this.auctionModel
           .findByIdAndUpdate(
             auctionId,
@@ -965,21 +856,10 @@ export class AuctionService {
     }
   }
 
-  /**
-   * Get all auctions
-   *
-   * @returns Array of all auction documents
-   */
   async getAllAuctions(): Promise<AuctionDocument[]> {
     return this.auctionModel.find().sort({ createdAt: -1 }).exec();
   }
 
-  /**
-   * Get auction by ID
-   *
-   * @param auctionId Auction ID
-   * @returns Auction document
-   */
   async getAuctionById(auctionId: string): Promise<AuctionDocument> {
     const auction = await this.auctionModel.findById(auctionId).exec();
     if (!auction) {
@@ -988,30 +868,32 @@ export class AuctionService {
     return auction;
   }
 
-  /**
-   * Get current round for auction
-   *
-   * @param auctionId Auction ID
-   * @returns Current round document
-   */
   async getCurrentRound(
     auctionId: string,
   ): Promise<AuctionRoundDocument | null> {
     const auction = await this.getAuctionById(auctionId);
-    return this.auctionRoundModel
+    
+    let round = await this.auctionRoundModel
       .findOne({
         auctionId,
         roundIndex: auction.currentRound,
       })
       .exec();
+
+    // для завершенных аукционов берем последний закрытый раунд
+    if (!round && auction.status === AuctionStatus.COMPLETED) {
+      round = await this.auctionRoundModel
+        .findOne({
+          auctionId,
+          closed: true,
+        })
+        .sort({ roundIndex: -1 })
+        .exec();
+    }
+
+    return round;
   }
 
-  /**
-   * Get all rounds for auction
-   *
-   * @param auctionId Auction ID
-   * @returns Array of round documents
-   */
   async getAuctionRounds(auctionId: string): Promise<AuctionRoundDocument[]> {
     return this.auctionRoundModel
       .find({ auctionId })
@@ -1019,37 +901,38 @@ export class AuctionService {
       .exec();
   }
 
-  /**
-   * Calculate gifts per round for current round (for display purposes)
-   * Uses the same logic as closeCurrentRound but without transaction
-   *
-   * @param auctionId Auction ID
-   * @returns Object with giftsPerRound and remainingGifts
-   */
+  // считаем подарки для отображения (без транзакции)
   async calculateGiftsPerRoundForDisplay(
     auctionId: string,
   ): Promise<{ giftsPerRound: number; remainingGifts: number; alreadyAwarded: number }> {
     const auction = await this.getAuctionById(auctionId);
     const isLastRound = auction.currentRound === auction.totalRounds - 1;
+    const isCompleted = auction.status === AuctionStatus.COMPLETED;
 
-    // Calculate how many gifts were already awarded in previous rounds
-    const previousRounds = await this.auctionRoundModel
-      .find({
-        auctionId,
-        roundIndex: { $lt: auction.currentRound },
-        closed: true,
-      })
-      .exec();
+    const query: any = {
+      auctionId,
+      closed: true,
+    };
 
-    const alreadyAwarded = previousRounds.reduce(
-      (sum, r) => sum + r.winnersCount,
+    if (isCompleted) {
+      // для завершенных считаем все закрытые раунды
+    } else {
+      query.roundIndex = { $lt: auction.currentRound };
+    }
+
+    const closedRounds = await this.auctionRoundModel.find(query).exec();
+
+    const alreadyAwarded = closedRounds.reduce(
+      (sum, r) => sum + (r.winnersCount || 0),
       0,
     );
 
     const remainingGifts = auction.totalGifts - alreadyAwarded;
 
     let giftsPerRound: number;
-    if (isLastRound) {
+    if (isCompleted) {
+      giftsPerRound = 0;
+    } else if (isLastRound) {
       giftsPerRound = Math.max(0, remainingGifts);
     } else {
       const baseGiftsPerRound = Math.ceil(auction.totalGifts / auction.totalRounds);

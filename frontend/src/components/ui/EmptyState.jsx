@@ -1,21 +1,10 @@
 import Button from './Button';
 import Card from './Card';
 
-/**
- * EmptyState Component
- * 
- * Универсальный компонент для отображения пустых состояний
- * 
- * @param {string} icon - Emoji или текст иконки
- * @param {string} title - Заголовок
- * @param {string} message - Сообщение
- * @param {React.ReactNode} action - Дополнительное действие (кнопка и т.д.)
- * @param {string} className - Дополнительные CSS классы
- */
 const EmptyState = ({ 
   icon = '📦', 
-  title = 'Nothing Here', 
-  message = 'No items found.',
+  title = 'Здесь ничего нет', 
+  message = 'Элементы не найдены.',
   action = null,
   className = '' 
 }) => {

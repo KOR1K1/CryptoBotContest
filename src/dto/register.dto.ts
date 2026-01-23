@@ -1,11 +1,6 @@
 import { IsString, MinLength, IsEmail, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * RegisterDto
- * 
- * DTO for user registration
- */
 export class RegisterDto {
   @ApiProperty({
     description: 'Username (must be unique)',

@@ -10,11 +10,6 @@ import Loading from '../components/ui/Loading';
 import Tooltip from '../components/ui/Tooltip';
 import EmptyState from '../components/ui/EmptyState';
 
-/**
- * AuctionsPage Component
- * 
- * Страница со списком всех аукционов с фильтрацией, сортировкой и улучшенным дизайном
- */
 const AuctionsPage = () => {
   const [auctions, setAuctions] = useState([]);
   const [filteredAuctions, setFilteredAuctions] = useState([]);
@@ -30,18 +25,15 @@ const AuctionsPage = () => {
   const loadAuctions = async (forceRefresh = false) => {
     try {
       setError(null);
-      // Add timestamp to bypass cache if force refresh
       const cacheBuster = forceRefresh ? `?_t=${Date.now()}` : '';
       const auctionsData = await apiRequest(`/auctions${cacheBuster}`);
       
-      // Get gift info and max bids for each auction
       const auctionsWithDetails = await Promise.all(
         auctionsData.map(async (auction) => {
           let giftInfo = {};
           try {
             giftInfo = await apiRequest(`/gifts/${auction.giftId}`);
           } catch (error) {
-            // Silent fail for gift info - not critical
             console.warn('Error loading gift:', error);
           }
 
@@ -63,8 +55,8 @@ const AuctionsPage = () => {
       setAuctions(auctionsWithDetails);
     } catch (error) {
       console.error('Error loading auctions:', error);
-      setError(error.message || 'Failed to load auctions');
-      showToast(`Failed to load auctions: ${error.message}`, 'error');
+      setError(error.message || 'Не удалось загрузить аукционы');
+      showToast(`Не удалось загрузить аукционы: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -103,9 +95,7 @@ const AuctionsPage = () => {
   useEffect(() => {
     loadAuctions();
 
-    // Listen for refresh events from WebSocket
     const handleRefresh = (event) => {
-      // Check if this is a forced refresh (e.g., when auction completes)
       const forceRefresh = event?.detail?.force === true;
       loadAuctions(forceRefresh);
     };
@@ -115,15 +105,13 @@ const AuctionsPage = () => {
       window.removeEventListener('refresh-auctions', handleRefresh);
     };
   }, []);
-
-  // Loading State
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-2">Active Auctions</h1>
-            <p className="text-text-secondary">Loading auctions...</p>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Активные аукционы</h1>
+            <p className="text-text-secondary">Загрузка аукционов...</p>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -145,14 +133,14 @@ const AuctionsPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-2">Active Auctions</h1>
-            <p className="text-text-secondary">Something went wrong</p>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Активные аукционы</h1>
+            <p className="text-text-secondary">Что-то пошло не так</p>
           </div>
         </div>
         <Card variant="elevated" className="p-8 text-center">
           <div className="space-y-4">
             <div className="text-status-error text-6xl">⚠️</div>
-            <h2 className="text-2xl font-semibold text-text-primary">Failed to Load Auctions</h2>
+            <h2 className="text-2xl font-semibold text-text-primary">Не удалось загрузить аукционы</h2>
             <p className="text-text-secondary">{error}</p>
             <Button
               variant="primary"
@@ -161,7 +149,7 @@ const AuctionsPage = () => {
                 loadAuctions(true);
               }}
             >
-              Retry
+              Повторить
             </Button>
           </div>
         </Card>
@@ -174,14 +162,14 @@ const AuctionsPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary mb-2">Active Auctions</h1>
+          <h1 className="text-3xl font-bold text-text-primary mb-2">Активные аукционы</h1>
           <p className="text-text-secondary">
-            {filteredAuctions.length} {filteredAuctions.length === 1 ? 'auction' : 'auctions'} found
+            Найдено {filteredAuctions.length} {filteredAuctions.length === 1 ? 'аукцион' : filteredAuctions.length < 5 ? 'аукциона' : 'аукционов'}
           </p>
         </div>
         
         <div className="flex flex-wrap items-center gap-3">
-          <Tooltip content="Create a new gift item">
+          <Tooltip content="Создать новый подарок">
             <Button
               variant="secondary"
               onClick={() => setShowGiftModal(true)}
@@ -191,11 +179,11 @@ const AuctionsPage = () => {
                 </svg>
               }
             >
-              New Gift
+              Новый подарок
             </Button>
           </Tooltip>
           
-          <Tooltip content="Create a new auction">
+          <Tooltip content="Создать новый аукцион">
             <Button
               variant="secondary"
               onClick={() => setShowAuctionModal(true)}
@@ -205,11 +193,11 @@ const AuctionsPage = () => {
                 </svg>
               }
             >
-              New Auction
+              Новый аукцион
             </Button>
           </Tooltip>
           
-          <Tooltip content="Refresh auctions list">
+          <Tooltip content="Обновить список аукционов">
             <Button
               variant="primary"
               onClick={() => {
@@ -222,7 +210,7 @@ const AuctionsPage = () => {
                 </svg>
               }
             >
-              Refresh
+              Обновить
             </Button>
           </Tooltip>
         </div>
@@ -234,36 +222,36 @@ const AuctionsPage = () => {
           {/* Status Filter */}
           <div className="flex-1">
             <label className="block text-sm font-medium text-text-secondary mb-2">
-              Filter by Status
+              Фильтр по статусу
             </label>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent"
             >
-              <option value="all">All Statuses</option>
-              <option value="CREATED">Created</option>
-              <option value="RUNNING">Running</option>
-              <option value="FINALIZING">Finalizing</option>
-              <option value="COMPLETED">Completed</option>
+              <option value="all">Все статусы</option>
+              <option value="CREATED">Создан</option>
+              <option value="RUNNING">Идет</option>
+              <option value="FINALIZING">Завершается</option>
+              <option value="COMPLETED">Завершен</option>
             </select>
           </div>
 
           {/* Sort */}
           <div className="flex-1">
             <label className="block text-sm font-medium text-text-secondary mb-2">
-              Sort By
+              Сортировка
             </label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="w-full px-4 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent"
             >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="highest-bid">Highest Bid</option>
-              <option value="lowest-bid">Lowest Bid</option>
-              <option value="status">Status</option>
+              <option value="newest">Сначала новые</option>
+              <option value="oldest">Сначала старые</option>
+              <option value="highest-bid">Максимальная ставка</option>
+              <option value="lowest-bid">Минимальная ставка</option>
+              <option value="status">По статусу</option>
             </select>
           </div>
         </div>
@@ -273,20 +261,20 @@ const AuctionsPage = () => {
       {filteredAuctions.length === 0 ? (
         <EmptyState
           icon="📦"
-          title="No Auctions Found"
+          title="Аукционы не найдены"
           message={
             statusFilter !== 'all'
-              ? `No auctions with status "${statusFilter}" found. Try changing the filter.`
-              : 'No auctions available. Create one using the buttons above.'
+              ? `Аукционы со статусом "${statusFilter === 'CREATED' ? 'Создан' : statusFilter === 'RUNNING' ? 'Идет' : statusFilter === 'FINALIZING' ? 'Завершается' : 'Завершен'}" не найдены. Попробуйте изменить фильтр.`
+              : 'Нет доступных аукционов. Создайте новый, используя кнопки выше.'
           }
           action={
             statusFilter !== 'all' ? (
-              <Tooltip content="Show all auctions regardless of status">
+              <Tooltip content="Показать все аукционы независимо от статуса">
                 <Button
                   variant="secondary"
                   onClick={() => setStatusFilter('all')}
                 >
-                  Show All Auctions
+                  Показать все аукционы
                 </Button>
               </Tooltip>
             ) : null

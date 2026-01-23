@@ -1,14 +1,5 @@
 import { useEffect, useState } from 'react';
 
-/**
- * FadeIn Component
- * 
- * Компонент для плавного появления элементов
- * 
- * @param {React.ReactNode} children - Дочерние элементы
- * @param {number} delay - Задержка перед появлением (мс)
- * @param {string} className - Дополнительные CSS классы
- */
 const FadeIn = ({ children, delay = 0, className = '' }) => {
   const [isVisible, setIsVisible] = useState(false);
 

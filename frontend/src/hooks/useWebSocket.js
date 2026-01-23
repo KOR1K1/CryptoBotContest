@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
-// Browser runs on host, so always use localhost:3000 (backend is exposed on host port 3000)
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+// определяем websocket url динамически по hostname
+// чтобы работало с других устройств в сети (например айфон по IP)
+function getWebSocketUrl() {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+  
+  const wsUrl = `${protocol}//${hostname}:3000`;
+  
+  console.log('[WebSocket] Current hostname:', hostname, 'WebSocket URL:', wsUrl);
+  
+  return wsUrl;
+}
 
 export const useWebSocket = (auctionId = null) => {
   const [socket, setSocket] = useState(null);
@@ -11,15 +21,12 @@ export const useWebSocket = (auctionId = null) => {
   const previousAuctionIdRef = useRef(null);
 
   useEffect(() => {
-    // Get token from localStorage
     const token = localStorage.getItem('auth_token');
+    const wsUrl = getWebSocketUrl();
     
-    const socketInstance = io(`${WS_URL}/auctions`, {
+    const socketInstance = io(`${wsUrl}/auctions`, {
       transports: ['websocket', 'polling'],
-      // Send token in handshake.auth (preferred method)
       auth: token ? { token } : undefined,
-      // Don't send token in query if we have it in auth (avoid duplication)
-      // Only use query as fallback if no token in auth
       query: token ? {} : {},
       reconnection: true,
       reconnectionDelay: 1000,
@@ -55,7 +62,6 @@ export const useWebSocket = (auctionId = null) => {
     setSocket(socketInstance);
 
     return () => {
-      // Remove all listeners
       Object.keys(listenersRef.current).forEach((event) => {
         socketInstance.off(event, listenersRef.current[event]);
       });
@@ -63,15 +69,12 @@ export const useWebSocket = (auctionId = null) => {
     };
   }, []);
 
-  // Subscribe/unsubscribe when auctionId changes
   useEffect(() => {
     if (socket && connected) {
-      // Unsubscribe from previous auction
       if (previousAuctionIdRef.current) {
         socket.emit('unsubscribe', { auctionId: previousAuctionIdRef.current });
       }
       
-      // Subscribe to new auction
       if (auctionId) {
         socket.emit('subscribe', { auctionId });
         previousAuctionIdRef.current = auctionId;

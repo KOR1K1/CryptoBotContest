@@ -4,7 +4,6 @@ import { useWebSocket } from './hooks/useWebSocket';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './index.css';
 
-// Pages
 import AuctionsPage from './pages/AuctionsPage';
 import AuctionDetailPage from './pages/AuctionDetailPage';
 import InventoryPage from './pages/InventoryPage';
@@ -13,30 +12,22 @@ import BotSimulatorPage from './pages/BotSimulatorPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 
-// Components
 import Header from './components/layout/Header';
 import NavBar from './components/layout/NavBar';
 import PageLayout from './components/layout/PageLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import ToastContainer from './components/ui/Toast';
 
-/**
- * WebSocketWrapper Component
- * 
- * Обрабатывает WebSocket события для текущего маршрута
- */
+// обертка для websocket событий
 function WebSocketWrapper({ children }) {
   const location = useLocation();
   const params = useParams();
   
-  // Определяем, нужно ли подключаться к WebSocket для конкретного аукциона
   const auctionId = location.pathname.startsWith('/auctions/') && params.id 
     ? params.id 
     : null;
   
   const { on } = useWebSocket(auctionId);
-
-  // Handle unauthorized events (401 errors)
   useEffect(() => {
     const handleUnauthorized = () => {
       window.location.href = '/login';
@@ -48,7 +39,6 @@ function WebSocketWrapper({ children }) {
     };
   }, []);
 
-  // Listen to WebSocket events
   useEffect(() => {
     if (!on) return;
 
@@ -57,10 +47,8 @@ function WebSocketWrapper({ children }) {
 
     const unsubscribeBid = on('bid_update', (data) => {
       console.log('Bid update:', data);
-      // Forward live top positions to detail page
       window.dispatchEvent(new CustomEvent('auction-top-update', { detail: data }));
 
-      // Force refresh if on auction detail page (fallback for other fields)
       if (isAuctionDetail && data.auctionId === params.id) {
         window.dispatchEvent(new CustomEvent('refresh-auction'));
       }
@@ -71,22 +59,17 @@ function WebSocketWrapper({ children }) {
 
     const unsubscribeAuction = on('auction_update', (data) => {
       console.log('Auction update received:', data);
-      // If auction status changed to COMPLETED, force immediate refresh
       const isCompleted = data.auction?.status === 'COMPLETED';
       
-      // Always refresh if this is the current auction being viewed
       if (isAuctionDetail && data.auctionId === params.id) {
         console.log('Forcing refresh for auction detail page, completed:', isCompleted);
-        // Force immediate refresh for completed auctions
         window.dispatchEvent(new CustomEvent('refresh-auction', { 
           detail: { force: isCompleted } 
         }));
-        // Also refresh rounds history
         window.dispatchEvent(new CustomEvent('refresh-rounds', { 
           detail: { auctionId: data.auctionId, force: isCompleted } 
         }));
       }
-      // Always refresh auctions list when any auction updates (especially when completed)
       if (isAuctionsList) {
         console.log('Forcing refresh for auctions list page, completed:', isCompleted);
         window.dispatchEvent(new CustomEvent('refresh-auctions', { 
@@ -95,10 +78,8 @@ function WebSocketWrapper({ children }) {
       }
     });
 
-    // Listen for auctions list updates (when new auction is created)
     const unsubscribeAuctionsList = on('auctions_list_update', (data) => {
       console.log('Auctions list update received:', data);
-      // Always refresh auctions list when new auction is created
       if (isAuctionsList) {
         console.log('Forcing refresh for auctions list page (new auction created)');
         window.dispatchEvent(new CustomEvent('refresh-auctions', { 
@@ -128,11 +109,7 @@ function WebSocketWrapper({ children }) {
   return children;
 }
 
-/**
- * AppLayout Component
- * 
- * Основной layout для авторизованных страниц
- */
+// основной layout для авторизованных страниц
 function AppLayout({ children }) {
   return (
     <PageLayout>
@@ -147,11 +124,7 @@ function AppLayout({ children }) {
 }
 
 
-/**
- * AppRoutes Component
- * 
- * Определяет все маршруты приложения
- */
+// все маршруты приложения
 function AppRoutes() {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
@@ -159,7 +132,6 @@ function AppRoutes() {
   return (
     <WebSocketWrapper>
       <Routes>
-          {/* Public routes */}
           <Route
             path="/login"
             element={
@@ -187,7 +159,6 @@ function AppRoutes() {
             }
           />
 
-          {/* Protected routes */}
           <Route
             path="/auctions"
             element={
@@ -239,7 +210,6 @@ function AppRoutes() {
             }
           />
 
-        {/* Default redirect */}
         <Route
           path="/"
           element={
@@ -250,7 +220,6 @@ function AppRoutes() {
           }
         />
 
-        {/* 404 - redirect to auctions or login */}
         <Route
           path="*"
           element={
@@ -265,11 +234,6 @@ function AppRoutes() {
   );
 }
 
-/**
- * App Component
- * 
- * Главный компонент приложения с роутингом
- */
 function App() {
   return (
     <AuthProvider>

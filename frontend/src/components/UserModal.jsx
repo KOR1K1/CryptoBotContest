@@ -6,15 +6,6 @@ import Input from './ui/Input';
 import Button from './ui/Button';
 import Tooltip from './ui/Tooltip';
 
-/**
- * UserModal Component
- * 
- * Модальное окно для создания нового пользователя с валидацией и улучшенным дизайном
- * 
- * @param {boolean} isOpen - Открыто ли модальное окно
- * @param {function} onClose - Callback для закрытия
- * @param {function} onCreated - Callback после успешного создания
- */
 const UserModal = ({ isOpen, onClose, onCreated }) => {
   const [username, setUsername] = useState('');
   const [initialBalance, setInitialBalance] = useState('10000');
@@ -22,7 +13,6 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Сброс формы при закрытии
   const handleClose = () => {
     if (!loading) {
       setUsername('');
@@ -33,7 +23,6 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
     }
   };
 
-  // Валидация отдельного поля
   const validateField = (field, value) => {
     const errors = { ...validationErrors };
     
@@ -41,11 +30,11 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
       case 'username':
         const trimmedUsername = value.trim();
         if (!trimmedUsername || trimmedUsername.length < 1) {
-          errors.username = 'Username must be at least 1 character';
+          errors.username = 'Имя пользователя должно быть не менее 1 символа';
         } else if (trimmedUsername.length > 50) {
-          errors.username = 'Username must not exceed 50 characters';
+          errors.username = 'Имя пользователя не должно превышать 50 символов';
         } else if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
-          errors.username = 'Username can only contain letters, numbers, and underscores';
+          errors.username = 'Имя пользователя может содержать только буквы, цифры и подчеркивания';
         } else {
           delete errors.username;
         }
@@ -69,7 +58,6 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
     return !errors[field];
   };
 
-  // Валидация всей формы
   const validateForm = () => {
     const fields = ['username', 'initialBalance'];
     const values = { username, initialBalance };
@@ -89,7 +77,7 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
     setError('');
     
     if (!validateForm()) {
-      setError('Please fix validation errors before submitting');
+      setError('Пожалуйста, исправьте ошибки валидации перед отправкой');
       return;
     }
 
@@ -106,13 +94,13 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
         },
       });
 
-      showToast('User created successfully!', 'success');
+      showToast('Пользователь успешно создан!', 'success');
       handleClose();
       if (onCreated) {
         onCreated();
       }
     } catch (err) {
-      const errorMsg = err.message || 'Failed to create user';
+      const errorMsg = err.message || 'Не удалось создать пользователя';
       setError(errorMsg);
       showToast(errorMsg, 'error');
     } finally {
@@ -125,15 +113,15 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
       isOpen={isOpen}
       onClose={handleClose}
       size="md"
-      title="Create New User"
+      title="Создать нового пользователя"
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Username Input */}
-        <Tooltip content="Username can contain letters, numbers, and underscores (1-50 characters)">
+        <Tooltip content="Имя пользователя может содержать буквы, цифры и подчеркивания (1-50 символов)">
           <Input
-            label="Username"
+            label="Имя пользователя"
             type="text"
             value={username}
             onChange={(e) => {
@@ -144,7 +132,7 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
               }
             }}
             onBlur={(e) => validateField('username', e.target.value)}
-            placeholder="Enter username"
+            placeholder="Введите имя пользователя"
             required
             maxLength={50}
             disabled={loading}
@@ -159,9 +147,9 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
         </Tooltip>
 
         {/* Initial Balance Input */}
-        <Tooltip content="Optional initial balance for the user (default: 0)">
+        <Tooltip content="Необязательный начальный баланс для пользователя (по умолчанию: 0)">
           <Input
-            label="Initial Balance (optional)"
+            label="Начальный баланс (необязательно)"
             type="number"
             value={initialBalance}
             onChange={(e) => {
@@ -201,7 +189,7 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
             onClick={handleClose}
             disabled={loading}
           >
-            Cancel
+            Отмена
           </Button>
           <Button
             type="submit"
@@ -209,7 +197,7 @@ const UserModal = ({ isOpen, onClose, onCreated }) => {
             loading={loading}
             disabled={loading || Object.keys(validationErrors).length > 0}
           >
-            {loading ? 'Creating...' : 'Create User'}
+            {loading ? 'Создание...' : 'Создать пользователя'}
           </Button>
         </div>
       </form>

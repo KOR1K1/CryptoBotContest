@@ -7,15 +7,6 @@ import Button from './ui/Button';
 import Tooltip from './ui/Tooltip';
 import Loading from './ui/Loading';
 
-/**
- * AuctionModal Component
- * 
- * Модальное окно для создания нового аукциона с валидацией и улучшенным дизайном
- * 
- * @param {boolean} isOpen - Открыто ли модальное окно
- * @param {function} onClose - Callback для закрытия
- * @param {function} onCreated - Callback после успешного создания
- */
 const AuctionModal = ({ isOpen, onClose, onCreated }) => {
   const [giftId, setGiftId] = useState('');
   const [totalGifts, setTotalGifts] = useState('2');
@@ -28,7 +19,6 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Загрузка списка подарков
   useEffect(() => {
     if (isOpen) {
       loadGifts();
@@ -42,13 +32,12 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
       setGifts(giftsData);
     } catch (error) {
       console.error('Error loading gifts:', error);
-      showToast('Failed to load gifts', 'error');
+      showToast('Не удалось загрузить подарки', 'error');
     } finally {
       setLoadingGifts(false);
     }
   };
 
-  // Сброс формы при закрытии
   const handleClose = () => {
     if (!loading) {
       setGiftId('');
@@ -62,14 +51,13 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
     }
   };
 
-  // Валидация отдельного поля
   const validateField = (field, value) => {
     const errors = { ...validationErrors };
     
     switch (field) {
       case 'giftId':
         if (!value || value.trim() === '') {
-          errors.giftId = 'Please select a gift';
+          errors.giftId = 'Пожалуйста, выберите подарок';
         } else {
           delete errors.giftId;
         }
@@ -78,7 +66,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
       case 'totalGifts':
         const gifts = parseInt(value);
         if (isNaN(gifts) || gifts < 1 || gifts > 1000) {
-          errors.totalGifts = 'Total gifts must be between 1 and 1000';
+          errors.totalGifts = 'Всего подарков должно быть от 1 до 1000';
         } else {
           delete errors.totalGifts;
         }
@@ -96,7 +84,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
       case 'roundDuration':
         const duration = parseInt(value);
         if (isNaN(duration) || duration < 1) {
-          errors.roundDuration = 'Round duration must be at least 1 second';
+          errors.roundDuration = 'Длительность раунда должна быть не менее 1 секунды';
         } else {
           delete errors.roundDuration;
         }
@@ -105,7 +93,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
       case 'minBid':
         const bid = parseFloat(value);
         if (isNaN(bid) || bid < 1) {
-          errors.minBid = 'Minimum bid must be at least 1';
+          errors.minBid = 'Минимальная ставка должна быть не менее 1';
         } else {
           delete errors.minBid;
         }
@@ -116,7 +104,6 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
     return !errors[field];
   };
 
-  // Валидация всей формы
   const validateForm = () => {
     const fields = ['giftId', 'totalGifts', 'totalRounds', 'roundDuration', 'minBid'];
     const values = { giftId, totalGifts, totalRounds, roundDuration, minBid };
@@ -136,7 +123,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
     setError('');
     
     if (!validateForm()) {
-      setError('Please fix validation errors before submitting');
+      setError('Пожалуйста, исправьте ошибки валидации перед отправкой');
       return;
     }
 
@@ -154,13 +141,13 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
         },
       });
 
-      showToast('Auction created successfully!', 'success');
+      showToast('Аукцион успешно создан!', 'success');
       handleClose();
       if (onCreated) {
         onCreated();
       }
     } catch (err) {
-      const errorMsg = err.message || 'Failed to create auction';
+      const errorMsg = err.message || 'Не удалось создать аукцион';
       setError(errorMsg);
       showToast(errorMsg, 'error');
     } finally {
@@ -173,7 +160,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
       isOpen={isOpen}
       onClose={handleClose}
       size="lg"
-      title="Create New Auction"
+      title="Создать новый аукцион"
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
@@ -181,14 +168,14 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
         {/* Gift Selection */}
         <div>
           <label className="block text-sm font-medium text-text-secondary mb-2">
-            Gift <span className="text-status-error">*</span>
+            Подарок <span className="text-status-error">*</span>
           </label>
           {loadingGifts ? (
             <div className="flex items-center justify-center p-8">
               <Loading.Spinner />
             </div>
           ) : (
-            <Tooltip content="Select a gift to auction">
+            <Tooltip content="Выберите подарок для аукциона">
               <select
                 value={giftId}
                 onChange={(e) => {
@@ -207,7 +194,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
                     : 'border-border'
                 }`}
               >
-                <option value="">Select a gift...</option>
+                <option value="">Выберите подарок...</option>
                 {gifts.map((gift) => (
                   <option key={gift.id} value={gift.id}>
                     {gift.title}
@@ -223,9 +210,9 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
 
         {/* Total Gifts and Total Rounds */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <Tooltip content="Number of gifts to be distributed (1-1000)">
+          <Tooltip content="Количество подарков для распределения (1-1000)">
             <Input
-              label="Total Gifts"
+              label="Всего подарков"
               type="number"
               value={totalGifts}
               onChange={(e) => {
@@ -250,9 +237,9 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
             />
           </Tooltip>
 
-          <Tooltip content="Number of rounds in the auction (1-20)">
+          <Tooltip content="Количество раундов в аукционе (1-20)">
             <Input
-              label="Total Rounds"
+              label="Всего раундов"
               type="number"
               value={totalRounds}
               onChange={(e) => {
@@ -280,9 +267,9 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
 
         {/* Round Duration and Minimum Bid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <Tooltip content="Duration of each round in seconds">
+          <Tooltip content="Длительность каждого раунда в секундах">
             <Input
-              label="Round Duration (seconds)"
+              label="Длительность раунда (секунды)"
               type="number"
               value={roundDuration}
               onChange={(e) => {
@@ -306,9 +293,9 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
             />
           </Tooltip>
 
-          <Tooltip content="Minimum bid amount required">
+          <Tooltip content="Минимальная сумма ставки">
             <Input
-              label="Minimum Bid"
+              label="Минимальная ставка"
               type="number"
               value={minBid}
               onChange={(e) => {
@@ -349,7 +336,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
             onClick={handleClose}
             disabled={loading}
           >
-            Cancel
+            Отмена
           </Button>
           <Button
             type="submit"
@@ -357,7 +344,7 @@ const AuctionModal = ({ isOpen, onClose, onCreated }) => {
             loading={loading}
             disabled={loading || Object.keys(validationErrors).length > 0 || loadingGifts}
           >
-            {loading ? 'Creating...' : 'Create Auction'}
+            {loading ? 'Создание...' : 'Создать аукцион'}
           </Button>
         </div>
       </form>

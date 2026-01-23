@@ -1,23 +1,6 @@
 import { forwardRef, useState } from 'react';
 
-/**
- * Input Component
- * 
- * Переиспользуемый компонент поля ввода с валидацией, иконками и состояниями ошибок
- * 
- * @param {string} type - Тип поля: 'text', 'password', 'number', 'email'
- * @param {string} placeholder - Placeholder текст
- * @param {boolean} disabled - Отключить поле
- * @param {boolean} error - Показать состояние ошибки
- * @param {string} errorMessage - Сообщение об ошибке
- * @param {React.ReactNode} leftIcon - Иконка слева
- * @param {React.ReactNode} rightIcon - Иконка справа
- * @param {string} label - Метка поля
- * @param {string} helperText - Вспомогательный текст
- * @param {string} className - Дополнительные CSS классы
- * @param {function} onValidation - Callback для валидации (возвращает true/false)
- * @param {object} props - Остальные props для input элемента
- */
+// поле ввода с валидацией и иконками
 const Input = forwardRef(({
   type = 'text',
   placeholder,
@@ -37,10 +20,8 @@ const Input = forwardRef(({
   const [internalError, setInternalError] = useState(false);
   const [internalErrorMessage, setInternalErrorMessage] = useState('');
 
-  // Определяем реальный тип для password поля
   const inputType = type === 'password' && showPassword ? 'text' : type;
 
-  // Обработка валидации
   const handleBlur = (e) => {
     setIsFocused(false);
     
@@ -55,7 +36,6 @@ const Input = forwardRef(({
       }
     }
     
-    // Встроенная валидация для email
     if (type === 'email' && e.target.value) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(e.target.value)) {
@@ -64,7 +44,6 @@ const Input = forwardRef(({
       }
     }
     
-    // Вызываем оригинальный onBlur если он есть
     if (props.onBlur) {
       props.onBlur(e);
     }
@@ -89,21 +68,17 @@ const Input = forwardRef(({
     }
   };
 
-  // Определяем, есть ли ошибка
   const hasError = error || internalError;
   const displayErrorMessage = errorMessage || internalErrorMessage;
 
-  // Базовые классы для input
   const baseInputClasses = 'w-full bg-bg-secondary text-text-primary placeholder:text-text-muted border rounded-lg transition-all duration-fast focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed';
   
-  // Классы для состояний
   const stateClasses = hasError
     ? 'border-status-error focus:ring-2 focus:ring-status-error focus:border-status-error'
     : isFocused
     ? 'border-accent-primary focus:ring-2 focus:ring-accent-primary focus:border-accent-primary'
     : 'border-border hover:border-accent-secondary focus:border-accent-primary';
   
-  // Размеры padding в зависимости от наличия иконок
   const paddingClasses = leftIcon && rightIcon
     ? 'pl-10 pr-10'
     : leftIcon
@@ -114,7 +89,6 @@ const Input = forwardRef(({
   
   const inputClasses = `${baseInputClasses} ${stateClasses} ${paddingClasses} py-2.5 sm:py-2.5 text-base min-h-[44px] sm:min-h-0 ${className}`;
 
-  // Иконка для показа/скрытия пароля
   const PasswordToggle = () => {
     if (type !== 'password') return null;
     
@@ -124,7 +98,7 @@ const Input = forwardRef(({
         onClick={() => setShowPassword(!showPassword)}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary transition-colors duration-fast focus:outline-none"
         tabIndex={-1}
-        aria-label={showPassword ? 'Hide password' : 'Show password'}
+        aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
       >
         {showPassword ? (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +116,6 @@ const Input = forwardRef(({
 
   return (
     <div className="w-full">
-      {/* Label */}
       {label && (
         <label className="block text-sm font-medium text-text-secondary mb-2">
           {label}
@@ -150,16 +123,13 @@ const Input = forwardRef(({
         </label>
       )}
 
-      {/* Input wrapper */}
       <div className="relative">
-        {/* Left icon */}
         {leftIcon && (
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none">
             {leftIcon}
           </div>
         )}
 
-        {/* Input */}
         <input
           ref={ref}
           type={inputType}
@@ -180,7 +150,6 @@ const Input = forwardRef(({
           {...props}
         />
 
-        {/* Right icon or password toggle */}
         {type === 'password' ? (
           <PasswordToggle />
         ) : rightIcon ? (
@@ -190,7 +159,6 @@ const Input = forwardRef(({
         ) : null}
       </div>
 
-      {/* Helper text or error message */}
       {(helperText || (hasError && displayErrorMessage)) && (
         <div
           id={

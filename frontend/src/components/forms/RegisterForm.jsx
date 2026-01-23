@@ -4,15 +4,6 @@ import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Tooltip from '../ui/Tooltip';
 
-/**
- * RegisterForm Component
- * 
- * Форма регистрации с валидацией всех полей
- * 
- * @param {function} onSubmit - Callback при отправке формы (username, password, email, initialBalance)
- * @param {boolean} loading - Состояние загрузки
- * @param {string} error - Сообщение об ошибке
- */
 const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -21,21 +12,19 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
   const [initialBalance, setInitialBalance] = useState('10000');
   const [errors, setErrors] = useState({});
 
-  // Валидация username
   const validateUsername = (value) => {
     if (!value || value.trim().length === 0) {
-      setErrors(prev => ({ ...prev, username: 'Username is required' }));
+      setErrors(prev => ({ ...prev, username: 'Имя пользователя обязательно' }));
       return false;
     }
     if (value.trim().length < 3) {
-      setErrors(prev => ({ ...prev, username: 'Username must be at least 3 characters' }));
+      setErrors(prev => ({ ...prev, username: 'Имя пользователя должно быть не менее 3 символов' }));
       return false;
     }
     setErrors(prev => ({ ...prev, username: null }));
     return true;
   };
 
-  // Валидация email
   const validateEmail = (value) => {
     if (!value || value.trim().length === 0) {
       // Email опционален, очищаем ошибку если пусто
@@ -44,42 +33,39 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(value)) {
-      setErrors(prev => ({ ...prev, email: 'Please enter a valid email address' }));
+      setErrors(prev => ({ ...prev, email: 'Введите корректный email адрес' }));
       return false;
     }
     setErrors(prev => ({ ...prev, email: null }));
     return true;
   };
 
-  // Валидация password
   const validatePassword = (value) => {
     if (!value || value.length === 0) {
-      setErrors(prev => ({ ...prev, password: 'Password is required' }));
+      setErrors(prev => ({ ...prev, password: 'Пароль обязателен' }));
       return false;
     }
     if (value.length < 6) {
-      setErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters' }));
+      setErrors(prev => ({ ...prev, password: 'Пароль должен быть не менее 6 символов' }));
       return false;
     }
     setErrors(prev => ({ ...prev, password: null }));
     return true;
   };
 
-  // Валидация confirmPassword
   const validateConfirmPassword = (value) => {
     if (!value || value.length === 0) {
-      setErrors(prev => ({ ...prev, confirmPassword: 'Please confirm your password' }));
+      setErrors(prev => ({ ...prev, confirmPassword: 'Подтвердите пароль' }));
       return false;
     }
     if (value !== password) {
-      setErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match' }));
+      setErrors(prev => ({ ...prev, confirmPassword: 'Пароли не совпадают' }));
       return false;
     }
     setErrors(prev => ({ ...prev, confirmPassword: null }));
     return true;
   };
 
-  // Валидация initialBalance
   const validateInitialBalance = (value) => {
     if (!value || value.trim().length === 0) {
       // Balance опционален, очищаем ошибку если пусто
@@ -88,7 +74,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
     }
     const numValue = parseFloat(value);
     if (isNaN(numValue) || numValue < 0) {
-      setErrors(prev => ({ ...prev, initialBalance: 'Balance must be a positive number' }));
+      setErrors(prev => ({ ...prev, initialBalance: 'Баланс должен быть положительным числом' }));
       return false;
     }
     setErrors(prev => ({ ...prev, initialBalance: null }));
@@ -98,7 +84,6 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Валидация всех полей
     const isUsernameValid = validateUsername(username);
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
@@ -109,7 +94,6 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
       return;
     }
 
-    // Вызываем onSubmit callback
     if (onSubmit) {
       onSubmit(
         username.trim(),
@@ -125,9 +109,9 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Username Field */}
         <div>
-          <Tooltip content="Choose a unique username (minimum 3 characters)" position="top">
+          <Tooltip content="Выберите уникальное имя пользователя (минимум 3 символа)" position="top">
             <Input
-              label="Username"
+              label="Имя пользователя"
               type="text"
               value={username}
               onChange={(e) => {
@@ -137,7 +121,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                 }
               }}
               onBlur={(e) => validateUsername(e.target.value)}
-              placeholder="Choose a username"
+              placeholder="Выберите имя пользователя"
               required
               minLength={3}
               disabled={loading}
@@ -148,7 +132,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               }
-              aria-label="Username"
+              aria-label="Имя пользователя"
               aria-required="true"
               aria-invalid={!!errors.username}
             />
@@ -157,9 +141,9 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
 
         {/* Email Field */}
         <div>
-          <Tooltip content="Email is optional, but recommended for account recovery" position="top">
+          <Tooltip content="Email опционален, но рекомендуется для восстановления аккаунта" position="top">
             <Input
-              label="Email (optional)"
+              label="Email (необязательно)"
               type="email"
               value={email}
               onChange={(e) => {
@@ -186,9 +170,9 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
 
         {/* Password Field */}
         <div>
-          <Tooltip content="Password must be at least 6 characters long" position="top">
+          <Tooltip content="Пароль должен быть не менее 6 символов" position="top">
             <Input
-              label="Password"
+              label="Пароль"
               type="password"
               value={password}
               onChange={(e) => {
@@ -202,7 +186,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                 }
               }}
               onBlur={(e) => validatePassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="Не менее 6 символов"
               required
               minLength={6}
               disabled={loading}
@@ -213,7 +197,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               }
-              aria-label="Password"
+              aria-label="Пароль"
               aria-required="true"
               aria-invalid={!!errors.password}
             />
@@ -222,9 +206,9 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
 
         {/* Confirm Password Field */}
         <div>
-          <Tooltip content="Re-enter your password to confirm" position="top">
+          <Tooltip content="Повторите пароль для подтверждения" position="top">
             <Input
-              label="Confirm Password"
+              label="Подтвердите пароль"
               type="password"
               value={confirmPassword}
               onChange={(e) => {
@@ -234,7 +218,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                 }
               }}
               onBlur={(e) => validateConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
+              placeholder="Подтвердите пароль"
               required
               disabled={loading}
               error={!!errors.confirmPassword}
@@ -244,7 +228,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               }
-              aria-label="Confirm Password"
+              aria-label="Подтвердите пароль"
               aria-required="true"
               aria-invalid={!!errors.confirmPassword}
             />
@@ -253,9 +237,9 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
 
         {/* Initial Balance Field */}
         <div>
-          <Tooltip content="Starting balance for your account (optional, default: 10000)" position="top">
+          <Tooltip content="Начальный баланс для вашего аккаунта (необязательно, по умолчанию: 10000)" position="top">
             <Input
-              label="Initial Balance (optional)"
+              label="Начальный баланс (необязательно)"
               type="number"
               value={initialBalance}
               onChange={(e) => {
@@ -275,7 +259,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               }
-              aria-label="Initial Balance"
+              aria-label="Начальный баланс"
               aria-invalid={!!errors.initialBalance}
             />
           </Tooltip>
@@ -297,7 +281,7 @@ const RegisterForm = ({ onSubmit, loading = false, error = null }) => {
           disabled={loading}
           className="w-full"
         >
-          {loading ? 'Registering...' : 'Register'}
+          {loading ? 'Регистрация...' : 'Зарегистрироваться'}
         </Button>
       </form>
     </Card>

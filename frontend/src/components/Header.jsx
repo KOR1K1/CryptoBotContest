@@ -85,29 +85,22 @@ const Header = () => {
       }
     };
 
-    // Also handle window blur/focus events (for browser minimization)
     const handleWindowBlur = () => {
-      // Browser window lost focus (minimized or switched to another app)
       stopPolling();
     };
 
     const handleWindowFocus = () => {
-      // Browser window regained focus
       if (!document.hidden && document.visibilityState !== 'hidden') {
-        refreshBalance(); // Immediate refresh
+        refreshBalance();
         startPolling(ACTIVE_INTERVAL);
       }
     };
 
-    // Start with active interval (only if tab is visible)
     if (!document.hidden && document.visibilityState !== 'hidden') {
       startPolling(ACTIVE_INTERVAL);
     }
 
-    // Listen for tab visibility changes
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Listen for window blur/focus (for browser minimization)
     window.addEventListener('blur', handleWindowBlur);
     window.addEventListener('focus', handleWindowFocus);
 

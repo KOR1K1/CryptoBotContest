@@ -27,11 +27,6 @@ import { ParseMongoIdPipe } from '../../common/pipes/mongo-id.pipe';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 
-/**
- * UsersController
- *
- * Handles user-related API endpoints
- */
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
@@ -44,14 +39,8 @@ export class UsersController {
     private bidService: BidService,
   ) {}
 
-  /**
-   * GET /users
-   * Get all users
-   *
-   * @returns Array of users
-   */
   @Get()
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get all users', description: 'Returns a list of all registered users with their balances' })
   @ApiResponse({ status: 200, description: 'List of users retrieved successfully' })
   async getUsers() {
@@ -69,20 +58,12 @@ export class UsersController {
     }));
   }
 
-  /**
-   * POST /users
-   * Create a new user
-   *
-   * @param dto CreateUserDto
-   * @returns Created user (without sensitive data)
-   */
-  @Post()
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create a new user', description: 'Creates a new user with optional initial balance' })
-  @ApiResponse({ status: 201, description: 'User created successfully' })
-  @ApiResponse({ status: 409, description: 'Username already exists' })
-  async createUser(@Body() dto: CreateUserDto) {
-    // Check if username already exists
+    @Post()
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({ summary: 'Create a new user', description: 'Creates a new user with optional initial balance' })
+    @ApiResponse({ status: 201, description: 'User created successfully' })
+    @ApiResponse({ status: 409, description: 'Username already exists' })
+    async createUser(@Body() dto: CreateUserDto) {
     const existingUser = await this.userModel
       .findOne({ username: dto.username })
       .exec();
@@ -97,14 +78,12 @@ export class UsersController {
       lockedBalance: 0,
     });
 
-    // If initial balance is provided, deposit it
     if (dto.initialBalance && dto.initialBalance > 0) {
       await this.balanceService.deposit(
         user._id.toString(),
         dto.initialBalance,
         `Initial balance deposit for user ${dto.username}`,
       );
-      // Reload user to get updated balance
       const updatedUser = await this.userModel.findById(user._id).exec();
       if (updatedUser) {
         return {
@@ -126,18 +105,10 @@ export class UsersController {
     };
   }
 
-  /**
-   * GET /users/:id/balance
-   * Get user balance information
-   * NOTE: Must be before /users/:id route to avoid route conflicts
-   *
-   * @param id User ID
-   * @returns User balance data
-   */
   @Get(':id/balance')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get user balance', description: 'Returns user balance, locked balance, and validates invariants. Requires authentication and access to own account.' })
   @ApiParam({ name: 'id', description: 'User ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Balance retrieved successfully' })
@@ -148,7 +119,6 @@ export class UsersController {
     @Param('id', ParseMongoIdPipe) id: string,
     @CurrentUser() currentUser: UserDocument,
   ) {
-    // Check if user is accessing their own balance
     if (currentUser._id.toString() !== id) {
       throw new ForbiddenException('Cannot access other user\'s balance');
     }
@@ -159,7 +129,6 @@ export class UsersController {
       throw new NotFoundException('User not found');
     }
 
-    // Validate balance invariants
     const invariantsValid =
       await this.balanceService.validateBalanceInvariants(id);
 
@@ -172,14 +141,6 @@ export class UsersController {
     };
   }
 
-  /**
-   * GET /users/:id/bids
-   * Get all bids for a user (across all auctions)
-   * NOTE: Must be before /users/:id route to avoid route conflicts
-   *
-   * @param id User ID
-   * @returns Array of user's bids
-   */
   @Get(':id/bids')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -192,7 +153,6 @@ export class UsersController {
     @Param('id', ParseMongoIdPipe) id: string,
     @CurrentUser() currentUser: UserDocument,
   ) {
-    // Check if user is accessing their own bids
     if (currentUser._id.toString() !== id) {
       throw new ForbiddenException('Cannot access other user\'s bids');
     }
@@ -210,16 +170,6 @@ export class UsersController {
     }));
   }
 
-  /**
-   * POST /users/:id/inventory/add
-   * Add a gift to user's inventory (admin function - for testing/demo purposes)
-   * Creates a fake WON bid to simulate winning a gift
-   * NOTE: Must be before /users/:id/inventory route to avoid route conflicts
-   *
-   * @param id User ID
-   * @param body { giftId: string, bidAmount: number }
-   * @returns Added inventory item
-   */
   @Post(':id/inventory/add')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -229,7 +179,6 @@ export class UsersController {
     @Body() body: { giftId: string; bidAmount?: number },
     @CurrentUser() currentUser: UserDocument,
   ) {
-    // Check if user is accessing their own inventory
     if (currentUser._id.toString() !== id) {
       throw new ForbiddenException('Cannot add gifts to other user\'s inventory');
     }
@@ -244,10 +193,8 @@ export class UsersController {
       throw new NotFoundException('Gift not found');
     }
 
-    // Create a fake auction for this gift (or find existing)
     let auction = await this.auctionModel.findOne({ giftId: body.giftId }).exec();
     if (!auction) {
-      // Create a dummy auction
       auction = await this.auctionModel.create({
         giftId: body.giftId,
         totalGifts: 1,
@@ -259,7 +206,6 @@ export class UsersController {
       });
     }
 
-    // Create a WON bid for this user (wonInRoundIndex so it appears in /auctions/:id/rounds)
     const bid = await this.bidModel.create({
       userId: id,
       auctionId: auction._id,
@@ -282,18 +228,10 @@ export class UsersController {
     };
   }
 
-  /**
-   * GET /users/:id/inventory
-   * Get user's won gifts (inventory)
-   * NOTE: Must be before /users/:id route to avoid route conflicts
-   *
-   * @param id User ID
-   * @returns Array of won gifts with gift details
-   */
   @Get(':id/inventory')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get user inventory', description: 'Returns all gifts won by the user in auctions. Requires authentication and access to own account.' })
   @ApiParam({ name: 'id', description: 'User ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Inventory retrieved successfully' })
@@ -303,7 +241,6 @@ export class UsersController {
     @Param('id', ParseMongoIdPipe) id: string,
     @CurrentUser() currentUser: UserDocument,
   ) {
-    // Check if user is accessing their own inventory
     if (currentUser._id.toString() !== id) {
       throw new ForbiddenException('Cannot access other user\'s inventory');
     }
@@ -311,10 +248,8 @@ export class UsersController {
     const auctionModel = this.userModel.db.model('Auction');
     const giftModel = this.userModel.db.model('Gift');
 
-    // Get all WON bids for this user
     const wonBids = await this.bidService.getUserBids(id, BidStatus.WON);
 
-    // Get gift details for each bid
     const inventory = await Promise.all(
       wonBids.map(async (bid: BidDocument) => {
         const auction = await auctionModel.findById(bid.auctionId).exec();
@@ -344,16 +279,8 @@ export class UsersController {
     return inventory.filter((item) => item !== null);
   }
 
-  /**
-   * GET /users/:id
-   * Get user by ID
-   * NOTE: Must be after specific routes like /users/:id/balance
-   *
-   * @param id User ID
-   * @returns User data
-   */
   @Get(':id')
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get user by ID', description: 'Returns user details including balance information' })
   @ApiParam({ name: 'id', description: 'User ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'User retrieved successfully' })

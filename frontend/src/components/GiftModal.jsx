@@ -6,15 +6,6 @@ import Input from './ui/Input';
 import Button from './ui/Button';
 import Tooltip from './ui/Tooltip';
 
-/**
- * GiftModal Component
- * 
- * Модальное окно для создания нового подарка с валидацией и улучшенным дизайном
- * 
- * @param {boolean} isOpen - Открыто ли модальное окно
- * @param {function} onClose - Callback для закрытия
- * @param {function} onCreated - Callback после успешного создания
- */
 const GiftModal = ({ isOpen, onClose, onCreated }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,12 +16,10 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
   const [error, setError] = useState('');
   const [validationErrors, setValidationErrors] = useState({});
 
-  // Validation limits
   const TITLE_MAX_LENGTH = 200;
   const DESCRIPTION_MAX_LENGTH = 1000;
   const IMAGE_URL_MAX_LENGTH = 500;
 
-  // Сброс формы при закрытии
   const handleClose = () => {
     if (!loading) {
       setTitle('');
@@ -44,7 +33,6 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
     }
   };
 
-  // Валидация отдельного поля
   const validateField = (field, value) => {
     const errors = { ...validationErrors };
     
@@ -52,9 +40,9 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       case 'title':
         const trimmedTitle = value.trim();
         if (!trimmedTitle || trimmedTitle.length < 1) {
-          errors.title = 'Title must be at least 1 character';
+          errors.title = 'Название должно быть не менее 1 символа';
         } else if (trimmedTitle.length > TITLE_MAX_LENGTH) {
-          errors.title = `Title must not exceed ${TITLE_MAX_LENGTH} characters`;
+          errors.title = `Название не должно превышать ${TITLE_MAX_LENGTH} символов`;
         } else {
           delete errors.title;
         }
@@ -62,7 +50,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       
       case 'description':
         if (value.trim().length > DESCRIPTION_MAX_LENGTH) {
-          errors.description = `Description must not exceed ${DESCRIPTION_MAX_LENGTH} characters`;
+          errors.description = `Описание не должно превышать ${DESCRIPTION_MAX_LENGTH} символов`;
         } else {
           delete errors.description;
         }
@@ -71,9 +59,9 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       case 'imageUrl':
         const trimmedUrl = value.trim();
         if (trimmedUrl && trimmedUrl.length > IMAGE_URL_MAX_LENGTH) {
-          errors.imageUrl = `Image URL must not exceed ${IMAGE_URL_MAX_LENGTH} characters`;
+          errors.imageUrl = `URL изображения не должен превышать ${IMAGE_URL_MAX_LENGTH} символов`;
         } else if (trimmedUrl && !/^https?:\/\/.+/.test(trimmedUrl)) {
-          errors.imageUrl = 'Image URL must be a valid URL starting with http:// or https://';
+          errors.imageUrl = 'URL изображения должен быть валидным URL, начинающимся с http:// или https://';
         } else {
           delete errors.imageUrl;
         }
@@ -82,7 +70,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       case 'basePrice':
         const price = parseFloat(value);
         if (isNaN(price) || price < 0) {
-          errors.basePrice = 'Base price must be a valid number >= 0';
+          errors.basePrice = 'Базовая цена должна быть валидным числом >= 0';
         } else {
           delete errors.basePrice;
         }
@@ -91,7 +79,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       case 'totalSupply':
         const supply = parseInt(value);
         if (isNaN(supply) || supply < 1 || supply > 10000) {
-          errors.totalSupply = 'Total supply must be between 1 and 10000';
+          errors.totalSupply = 'Общее количество должно быть от 1 до 10000';
         } else {
           delete errors.totalSupply;
         }
@@ -102,7 +90,6 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
     return !errors[field];
   };
 
-  // Валидация всей формы
   const validateForm = () => {
     const fields = ['title', 'description', 'imageUrl', 'basePrice', 'totalSupply'];
     const values = { title, description, imageUrl, basePrice, totalSupply };
@@ -122,7 +109,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
     setError('');
     
     if (!validateForm()) {
-      setError('Please fix validation errors before submitting');
+      setError('Пожалуйста, исправьте ошибки валидации перед отправкой');
       return;
     }
 
@@ -140,13 +127,13 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
         },
       });
 
-      showToast('Gift created successfully!', 'success');
+      showToast('Подарок успешно создан!', 'success');
       handleClose();
       if (onCreated) {
         onCreated();
       }
     } catch (err) {
-      const errorMsg = err.message || 'Failed to create gift';
+      const errorMsg = err.message || 'Не удалось создать подарок';
       setError(errorMsg);
       showToast(errorMsg, 'error');
     } finally {
@@ -159,15 +146,15 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
       isOpen={isOpen}
       onClose={handleClose}
       size="lg"
-      title="Create New Gift"
+      title="Создать новый подарок"
       closeOnBackdropClick={!loading}
       closeOnEscape={!loading}
     >
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Title Input */}
-        <Tooltip content={`Title must be 1-${TITLE_MAX_LENGTH} characters`}>
+        <Tooltip content={`Название должно быть от 1 до ${TITLE_MAX_LENGTH} символов`}>
           <Input
-            label={`Title (${title.length}/${TITLE_MAX_LENGTH})`}
+            label={`Название (${title.length}/${TITLE_MAX_LENGTH})`}
             type="text"
             value={title}
             onChange={(e) => {
@@ -178,7 +165,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
               }
             }}
             onBlur={(e) => validateField('title', e.target.value)}
-            placeholder="Gift title (1-200 characters)"
+            placeholder="Название подарка (1-200 символов)"
             required
             maxLength={TITLE_MAX_LENGTH}
             disabled={loading}
@@ -195,7 +182,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
         {/* Description Textarea */}
         <div>
           <label className="block text-sm font-medium text-text-secondary mb-2">
-            Description (optional) ({description.length}/{DESCRIPTION_MAX_LENGTH})
+            Описание (необязательно) ({description.length}/{DESCRIPTION_MAX_LENGTH})
           </label>
           <textarea
             value={description}
@@ -209,7 +196,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
             onBlur={(e) => validateField('description', e.target.value)}
             rows="3"
             maxLength={DESCRIPTION_MAX_LENGTH}
-            placeholder="Gift description (max 1000 characters)"
+            placeholder="Описание подарка (макс. 1000 символов)"
             disabled={loading}
             className={`w-full px-4 py-2 bg-bg-secondary border rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all duration-fast ${
               validationErrors.description
@@ -223,9 +210,9 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
         </div>
 
         {/* Image URL Input */}
-        <Tooltip content="Image URL must be a valid HTTP/HTTPS URL">
+        <Tooltip content="URL изображения должен быть валидным HTTP/HTTPS URL">
           <Input
-            label={`Image URL (optional) (${imageUrl.length}/${IMAGE_URL_MAX_LENGTH})`}
+            label={`URL изображения (необязательно) (${imageUrl.length}/${IMAGE_URL_MAX_LENGTH})`}
             type="url"
             value={imageUrl}
             onChange={(e) => {
@@ -251,9 +238,9 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
 
         {/* Base Price and Total Supply */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <Tooltip content="Base price of the gift">
+          <Tooltip content="Базовая цена подарка">
             <Input
-              label="Base Price"
+              label="Базовая цена"
               type="number"
               value={basePrice}
               onChange={(e) => {
@@ -278,9 +265,9 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
             />
           </Tooltip>
 
-          <Tooltip content="Total supply must be between 1 and 10000">
+          <Tooltip content="Общее количество должно быть от 1 до 10000">
             <Input
-              label="Total Supply"
+              label="Общее количество"
               type="number"
               value={totalSupply}
               onChange={(e) => {
@@ -322,7 +309,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
             disabled={loading}
             className="min-h-[44px] sm:min-h-0"
           >
-            Cancel
+            Отмена
           </Button>
           <Button
             type="submit"
@@ -331,7 +318,7 @@ const GiftModal = ({ isOpen, onClose, onCreated }) => {
             disabled={loading || Object.keys(validationErrors).length > 0}
             className="min-h-[44px] sm:min-h-0"
           >
-            {loading ? 'Creating...' : 'Create Gift'}
+            {loading ? 'Создание...' : 'Создать подарок'}
           </Button>
         </div>
       </form>

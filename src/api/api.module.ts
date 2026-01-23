@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { UsersController } from '../controllers/users/users.controller';
 import { AuctionsController } from '../controllers/auctions/auctions.controller';
 import { GiftsController } from '../controllers/gifts/gifts.controller';
+import { BotSimulatorController } from '../controllers/bot-simulator/bot-simulator.controller';
 import { User, UserSchema } from '../models/user.schema';
 import { Gift, GiftSchema } from '../models/gift.schema';
 import { Auction, AuctionSchema } from '../models/auction.schema';
@@ -14,12 +15,6 @@ import { GatewaysModule } from '../gateways/gateways.module';
 import { ThrottlerModule } from '../services/throttler/throttler.module';
 import { AuthModule } from '../auth/auth.module';
 
-/**
- * ApiModule
- *
- * Provides REST API controllers
- * Aggregates all service modules
- */
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -31,11 +26,11 @@ import { AuthModule } from '../auth/auth.module';
     BalanceModule,
     AuctionModule,
     BidModule,
-    GatewaysModule, // WebSocket gateway
-    ThrottlerModule, // WebSocket throttling
-    AuthModule, // Authentication and authorization (exports JwtAuthGuard)
+    GatewaysModule,
+    ThrottlerModule,
+    AuthModule,
   ],
-  controllers: [UsersController, AuctionsController, GiftsController],
+  controllers: [UsersController, AuctionsController, GiftsController, BotSimulatorController],
   exports: [],
 })
 export class ApiModule {}

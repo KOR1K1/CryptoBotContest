@@ -10,11 +10,6 @@ import Loading from '../components/ui/Loading';
 import Tooltip from '../components/ui/Tooltip';
 import EmptyState from '../components/ui/EmptyState';
 
-/**
- * InventoryPage Component
- * 
- * Страница инвентаря пользователя с улучшенным дизайном
- */
 const InventoryPage = () => {
   const { user } = useAuth();
   const currentUserId = user?.id;
@@ -35,8 +30,8 @@ const InventoryPage = () => {
       setInventory(inventoryData);
     } catch (error) {
       console.error('Error loading inventory:', error);
-      setError(error.message || 'Failed to load inventory');
-      showToast(`Failed to load inventory: ${error.message}`, 'error');
+      setError(error.message || 'Не удалось загрузить инвентарь');
+      showToast(`Не удалось загрузить инвентарь: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -46,14 +41,13 @@ const InventoryPage = () => {
     loadInventory();
   }, [currentUserId]);
 
-  // Loading State
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-2">My Inventory</h1>
-            <p className="text-text-secondary">Loading your gifts...</p>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Мой инвентарь</h1>
+            <p className="text-text-secondary">Загрузка ваших подарков...</p>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -75,20 +69,20 @@ const InventoryPage = () => {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-text-primary mb-2">My Inventory</h1>
-            <p className="text-text-secondary">Something went wrong</p>
+            <h1 className="text-3xl font-bold text-text-primary mb-2">Мой инвентарь</h1>
+            <p className="text-text-secondary">Что-то пошло не так</p>
           </div>
         </div>
         <Card variant="elevated" className="p-8 text-center">
           <div className="space-y-4">
             <div className="text-status-error text-6xl">⚠️</div>
-            <h2 className="text-2xl font-semibold text-text-primary">Failed to Load Inventory</h2>
+            <h2 className="text-2xl font-semibold text-text-primary">Не удалось загрузить инвентарь</h2>
             <p className="text-text-secondary">{error}</p>
             <Button
               variant="primary"
               onClick={loadInventory}
             >
-              Retry
+              Повторить
             </Button>
           </div>
         </Card>
@@ -101,14 +95,14 @@ const InventoryPage = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary mb-2">My Inventory</h1>
+          <h1 className="text-3xl font-bold text-text-primary mb-2">Мой инвентарь</h1>
           <p className="text-text-secondary">
-            {inventory.length} {inventory.length === 1 ? 'gift' : 'gifts'} in your collection
+            {inventory.length} {inventory.length === 1 ? 'подарок' : inventory.length < 5 ? 'подарка' : 'подарков'} в вашей коллекции
           </p>
         </div>
         
         <div className="flex items-center gap-3">
-          <Tooltip content="Refresh inventory list">
+          <Tooltip content="Обновить список инвентаря">
             <Button
               variant="secondary"
               onClick={loadInventory}
@@ -118,11 +112,11 @@ const InventoryPage = () => {
                 </svg>
               }
             >
-              Refresh
+              Обновить
             </Button>
           </Tooltip>
           
-          <Tooltip content="Add a gift to your inventory (Demo)">
+          <Tooltip content="Добавить подарок в инвентарь (Демо)">
             <Button
               variant="primary"
               onClick={() => setShowAddModal(true)}
@@ -132,7 +126,7 @@ const InventoryPage = () => {
                 </svg>
               }
             >
-              Add Gift
+              Добавить подарок
             </Button>
           </Tooltip>
         </div>
@@ -142,10 +136,10 @@ const InventoryPage = () => {
       {inventory.length === 0 ? (
         <EmptyState
           icon="🎁"
-          title="No Gifts Yet"
-          message="Win an auction to get gifts! Your won gifts will appear here."
+          title="Подарков пока нет"
+          message="Выиграйте аукцион, чтобы получить подарки! Ваши выигранные подарки появятся здесь."
           action={
-            <Tooltip content="Add a gift to your inventory for testing purposes">
+            <Tooltip content="Добавить подарок в инвентарь для тестирования">
               <Button
                 variant="secondary"
                 onClick={() => setShowAddModal(true)}
@@ -155,7 +149,7 @@ const InventoryPage = () => {
                   </svg>
                 }
               >
-                Add Gift (Demo)
+                Добавить подарок (Демо)
               </Button>
             </Tooltip>
           }

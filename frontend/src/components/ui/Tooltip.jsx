@@ -1,16 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 
-/**
- * Tooltip Component
- * 
- * Переиспользуемый компонент подсказки с позиционированием и анимацией
- * 
- * @param {React.ReactNode} children - Элемент, на который навешивается tooltip
- * @param {string} content - Текст подсказки
- * @param {string} position - Позиция: 'top', 'bottom', 'left', 'right'
- * @param {number} delay - Задержка показа в миллисекундах
- * @param {string} className - Дополнительные CSS классы
- */
 const Tooltip = ({
   children,
   content,
@@ -24,7 +13,6 @@ const Tooltip = ({
   const tooltipRef = useRef(null);
   const timeoutRef = useRef(null);
 
-  // Вычисление позиции tooltip
   const calculatePosition = () => {
     if (!triggerRef.current || !tooltipRef.current) return;
 
@@ -76,7 +64,6 @@ const Tooltip = ({
     
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
-      // Небольшая задержка для расчета позиции после показа
       setTimeout(calculatePosition, 10);
     }, delay);
   };
@@ -105,7 +92,6 @@ const Tooltip = ({
     }
   }, [isVisible, position]);
 
-  // Стрелка для tooltip
   const Arrow = () => {
     const arrowClasses = {
       top: 'bottom-[-4px] left-1/2 -translate-x-1/2 border-t-bg-card border-l-transparent border-r-transparent border-b-transparent',

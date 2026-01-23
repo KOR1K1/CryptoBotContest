@@ -7,22 +7,15 @@ import { User, UserSchema } from '../../models/user.schema';
 import { BalanceModule } from '../balance/balance.module';
 import { RedisLockModule } from '../redis-lock/redis-lock.module';
 
-/**
- * BidModule
- *
- * Provides BidService for bid placement and management
- * Depends on BalanceModule for fund operations
- * Optionally uses RedisLockModule for distributed locking (high-load scenarios)
- */
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Bid.name, schema: BidSchema },
       { name: Auction.name, schema: AuctionSchema },
-      { name: User.name, schema: UserSchema }, // Added for balance validation inside transaction
+      { name: User.name, schema: UserSchema },
     ]),
     BalanceModule,
-    RedisLockModule, // Optional Redis locks for high-load scenarios
+    RedisLockModule,
   ],
   providers: [BidService],
   exports: [BidService],

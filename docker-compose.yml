@@ -10,7 +10,7 @@ services:
       - .env
     environment:
       - NODE_ENV=development
-      - MONGODB_URI=mongodb://mongo:27017/auction_db
+      - MONGODB_URI=mongodb://mongo:27017/auction_db?replicaSet=rs0
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       # Optional: Explicitly set Docker container resources (overrides auto-detection)
@@ -143,9 +143,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:3000
-      - VITE_WS_URL=http://localhost:3000
+    # Don't set VITE_API_URL/VITE_WS_URL - let frontend determine dynamically based on hostname
+    # This allows access from other devices on the network (e.g., iPhone via IP)
     depends_on:
       - app
     networks:

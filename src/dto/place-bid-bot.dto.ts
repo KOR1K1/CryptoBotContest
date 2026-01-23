@@ -2,12 +2,7 @@ import { IsNotEmpty, IsNumber, Min, Max, IsInt, IsMongoId } from 'class-validato
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * PlaceBidBotDto
- * 
- * DTO for placing a bid via bot endpoint
- * Note: userId is allowed in body for bot simulation/testing purposes
- */
+// для ботов userId можно в теле запроса
 export class PlaceBidBotDto {
   @ApiProperty({
     description: 'MongoDB ObjectId of the user placing the bid (for bot simulation)',

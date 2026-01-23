@@ -18,11 +18,6 @@ import { CreateGiftDto } from '../../dto/create-gift.dto';
 import { ParseMongoIdPipe } from '../../common/pipes/mongo-id.pipe';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
-/**
- * GiftsController
- *
- * Handles gift-related API endpoints
- */
 @ApiTags('Gifts')
 @Controller('gifts')
 export class GiftsController {
@@ -30,13 +25,6 @@ export class GiftsController {
     @InjectModel(Gift.name) private giftModel: Model<GiftDocument>,
   ) {}
 
-  /**
-   * POST /gifts
-   * Create a new gift
-   *
-   * @param dto CreateGiftDto
-   * @returns Created gift
-   */
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -67,14 +55,8 @@ export class GiftsController {
     };
   }
 
-  /**
-   * GET /gifts
-   * Get all gifts
-   *
-   * @returns Array of gifts
-   */
   @Get()
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get all gifts', description: 'Returns a list of all available gifts' })
   @ApiResponse({ status: 200, description: 'List of gifts retrieved successfully' })
   async getGifts() {
@@ -92,15 +74,8 @@ export class GiftsController {
     }));
   }
 
-  /**
-   * GET /gifts/:id
-   * Get gift by ID
-   *
-   * @param id Gift ID
-   * @returns Gift data
-   */
   @Get(':id')
-  @SkipThrottle() // Skip rate limiting for GET requests (read-only, safe)
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get gift by ID', description: 'Returns gift details by ID' })
   @ApiParam({ name: 'id', description: 'Gift ID', example: '507f1f77bcf86cd799439011' })
   @ApiResponse({ status: 200, description: 'Gift retrieved successfully' })

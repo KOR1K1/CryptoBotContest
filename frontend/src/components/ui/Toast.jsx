@@ -8,13 +8,6 @@ const notifyListeners = () => {
   listeners.forEach(listener => listener([...toasts]));
 };
 
-/**
- * Показать toast уведомление
- * 
- * @param {string} message - Сообщение
- * @param {string} type - Тип: 'success', 'error', 'warning', 'info'
- * @param {number} duration - Длительность показа в миллисекундах (0 = не закрывать автоматически)
- */
 export const showToast = (message, type = 'info', duration = 3000) => {
   const id = toastId++;
   const toast = { id, message, type, duration };
@@ -32,9 +25,6 @@ export const showToast = (message, type = 'info', duration = 3000) => {
   }
 };
 
-/**
- * Удалить toast по ID
- */
 export const removeToast = (id) => {
   const index = toasts.findIndex(t => t.id === id);
   if (index !== -1) {
@@ -43,11 +33,6 @@ export const removeToast = (id) => {
   }
 };
 
-/**
- * Toast Container Component
- * 
- * Контейнер для отображения всех toast уведомлений
- */
 const ToastContainer = () => {
   const [toastList, setToastList] = useState([]);
 
@@ -66,7 +51,6 @@ const ToastContainer = () => {
     };
   }, []);
 
-  // Иконки для разных типов
   const getIcon = (type) => {
     switch (type) {
       case 'success':
@@ -97,7 +81,6 @@ const ToastContainer = () => {
     }
   };
 
-  // Цвета для разных типов
   const getTypeClasses = (type) => {
     switch (type) {
       case 'success':
@@ -128,23 +111,20 @@ const ToastContainer = () => {
           role="alert"
           aria-live="polite"
         >
-          {/* Icon */}
           <div className="shrink-0 mt-0.5">
             <div className="w-4 h-4 sm:w-5 sm:h-5">
               {getIcon(toast.type)}
             </div>
           </div>
 
-          {/* Message */}
           <div className="flex-1 text-xs sm:text-sm font-medium wrap-break-word">
             {toast.message}
           </div>
 
-          {/* Close Button */}
           <button
             onClick={() => removeToast(toast.id)}
             className="shrink-0 text-text-muted hover:text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-primary rounded p-0.5"
-            aria-label="Close notification"
+            aria-label="Закрыть уведомление"
           >
             <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

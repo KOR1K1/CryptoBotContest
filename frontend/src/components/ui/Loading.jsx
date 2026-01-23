@@ -1,16 +1,4 @@
-/**
- * Loading Components
- * 
- * Компоненты для отображения состояний загрузки с улучшенными анимациями
- */
-
-/**
- * Spinner Component
- * 
- * @param {string} size - Размер: 'sm', 'md', 'lg'
- * @param {string} color - Цвет спиннера
- * @param {string} className - Дополнительные CSS классы
- */
+// спиннер загрузки
 export const Spinner = ({ size = 'md', color = 'accent-primary', className = '' }) => {
   const sizeClasses = {
     sm: 'h-4 w-4',
@@ -54,14 +42,7 @@ export const Spinner = ({ size = 'md', color = 'accent-primary', className = '' 
   );
 };
 
-/**
- * Skeleton Component
- * 
- * @param {string} variant - Вариант: 'text', 'circular', 'rectangular'
- * @param {string} width - Ширина (например, 'w-full', 'w-1/2')
- * @param {string} height - Высота (например, 'h-4', 'h-20')
- * @param {string} className - Дополнительные CSS классы
- */
+// скелетон для плейсхолдера
 export const Skeleton = ({ 
   variant = 'text', 
   width = 'w-full', 
@@ -78,7 +59,7 @@ export const Skeleton = ({
     <div
       className={`${width} ${height} ${variantClasses[variant]} bg-bg-tertiary ${className}`}
       aria-busy="true"
-      aria-label="Loading..."
+      aria-label="Загрузка..."
       style={{
         background: 'linear-gradient(90deg, #2a2a2a 25%, #1a1a1a 50%, #2a2a2a 75%)',
         backgroundSize: '200% 100%',
@@ -88,11 +69,7 @@ export const Skeleton = ({
   );
 };
 
-/**
- * Full Page Loader Component
- * 
- * @param {string} message - Сообщение загрузки
- */
+// полноэкранный лоадер
 export const FullPageLoader = ({ message = 'Loading...' }) => {
   return (
     <div className="fixed inset-0 bg-bg-primary/80 backdrop-blur-sm flex items-center justify-center z-50">
@@ -106,7 +83,6 @@ export const FullPageLoader = ({ message = 'Loading...' }) => {
   );
 };
 
-// Экспорт по умолчанию для обратной совместимости
 const Loading = {
   Spinner,
   Skeleton,

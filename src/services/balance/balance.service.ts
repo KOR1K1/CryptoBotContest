@@ -16,16 +16,9 @@ import {
 } from '../../models/ledger-entry.schema';
 import { LedgerType } from '../../common/enums/ledger-type.enum';
 
-/**
- * BalanceService
- *
- * Handles all balance operations with strict financial invariants:
- * - All operations are atomic (MongoDB transactions)
- * - Every operation creates a LedgerEntry (audit trail)
- * - Balance invariants are enforced: balance >= 0, lockedBalance >= 0
- *
- * This service is the ONLY place where User balances should be modified.
- */
+// операции с балансом, все атомарно через транзакции
+// каждая операция создает запись в ledger
+// это единственное место где меняется баланс юзера
 @Injectable()
 export class BalanceService {
   private readonly logger = new Logger(BalanceService.name);
@@ -37,15 +30,7 @@ export class BalanceService {
     private ledgerEntryModel: Model<LedgerEntryDocument>,
   ) {}
 
-  /**
-   * Validate that user has sufficient balance
-   * Does not modify balance, only checks
-   *
-   * @param userId User ID
-   * @param amount Amount to validate
-   * @returns true if user has sufficient balance
-   * @throws NotFoundException if user not found
-   */
+  // проверка достаточности баланса, не меняет баланс
   async validateBalance(userId: string, amount: number): Promise<boolean> {
     if (amount <= 0) {
       throw new BadRequestException('Amount must be positive');
@@ -66,20 +51,9 @@ export class BalanceService {
     return hasSufficientBalance;
   }
 
-  /**
-   * Lock funds for a bid
-   * Decreases balance, increases lockedBalance
-   * Creates LOCK ledger entry
-   *
-   * @param userId User ID
-   * @param amount Amount to lock
-   * @param referenceId Reference ID (usually bidId)
-   * @param description Optional description for ledger
-   * @param session Optional MongoDB session (for nested transactions)
-   * @returns Updated user document
-   * @throws NotFoundException if user not found
-   * @throws BadRequestException if insufficient balance
-   */
+  // блокировка средств для ставки
+  // уменьшает balance, увеличивает lockedBalance
+  // создает запись LOCK в ledger
   async lockFunds(
     userId: string,
     amount: number,
@@ -96,9 +70,7 @@ export class BalanceService {
     try {
       let result: UserDocument;
 
-      // Execute transaction logic
       const executeTransaction = async () => {
-        // Find user with lock (for concurrency safety)
         const user = await this.userModel
           .findById(userId)
           .session(useSession)
@@ -108,14 +80,12 @@ export class BalanceService {
           throw new NotFoundException(`User with ID ${userId} not found`);
         }
 
-        // Validate sufficient balance
         if (user.balance < amount) {
           throw new BadRequestException(
             `Insufficient balance: requested ${amount}, available ${user.balance}`,
           );
         }
 
-        // Update balance atomically
         const updatedUser = await this.userModel
           .findByIdAndUpdate(
             userId,
@@ -140,9 +110,6 @@ export class BalanceService {
           );
         }
 
-        // Create ledger entry
-        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
-        // If idempotency is needed, use unique index on (userId, type, referenceId, amount)
         await this.ledgerEntryModel.create(
           [
             {
@@ -163,8 +130,6 @@ export class BalanceService {
         );
       };
 
-      // If session was provided, we're already in a transaction - execute directly
-      // Otherwise, start a new transaction
       if (session) {
         await executeTransaction();
       } else {
@@ -199,18 +164,9 @@ export class BalanceService {
     }
   }
 
-  /**
-   * Unlock funds (rare, for edge cases)
-   * Increases balance, decreases lockedBalance
-   * Creates UNLOCK ledger entry
-   *
-   * @param userId User ID
-   * @param amount Amount to unlock
-   * @param referenceId Reference ID (usually bidId)
-   * @param description Optional description for ledger
-   * @param session Optional MongoDB session
-   * @returns Updated user document
-   */
+  // разблокировка средств (редко используется)
+  // увеличивает balance, уменьшает lockedBalance
+  // создает запись UNLOCK в ledger
   async unlockFunds(
     userId: string,
     amount: number,
@@ -227,7 +183,6 @@ export class BalanceService {
     try {
       let result: UserDocument;
 
-      // Execute transaction logic
       const executeTransaction = async () => {
         const user = await this.userModel
           .findById(userId)
@@ -238,14 +193,12 @@ export class BalanceService {
           throw new NotFoundException(`User with ID ${userId} not found`);
         }
 
-        // Validate sufficient locked balance
         if (user.lockedBalance < amount) {
           throw new BadRequestException(
             `Insufficient locked balance: requested ${amount}, locked ${user.lockedBalance}`,
           );
         }
 
-        // Update balance atomically
         const updatedUser = await this.userModel
           .findByIdAndUpdate(
             userId,
@@ -263,15 +216,12 @@ export class BalanceService {
           throw new InternalServerErrorException('Failed to update user balance');
         }
 
-        // Validate invariants
         if (updatedUser.balance < 0 || updatedUser.lockedBalance < 0) {
           throw new InternalServerErrorException(
             'Balance invariants violated after unlock operation',
           );
         }
 
-        // Create ledger entry
-        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
         await this.ledgerEntryModel.create(
           [
             {
@@ -292,8 +242,6 @@ export class BalanceService {
         );
       };
 
-      // If session was provided, we're already in a transaction - execute directly
-      // Otherwise, start a new transaction
       if (session) {
         await executeTransaction();
       } else {
@@ -325,18 +273,9 @@ export class BalanceService {
     }
   }
 
-  /**
-   * Payout funds (winner pays for gift)
-   * Decreases lockedBalance only (funds were already locked)
-   * Creates PAYOUT ledger entry
-   *
-   * @param userId User ID
-   * @param amount Amount to payout (deduct from locked balance)
-   * @param referenceId Reference ID (auctionId or bidId)
-   * @param description Optional description
-   * @param session Optional MongoDB session
-   * @returns Updated user document
-   */
+  // выплата средств (победитель платит за подарок)
+  // уменьшает только lockedBalance
+  // создает запись PAYOUT в ledger
   async payout(
     userId: string,
     amount: number,
@@ -353,7 +292,6 @@ export class BalanceService {
     try {
       let result: UserDocument;
 
-      // Execute transaction logic
       const executeTransaction = async () => {
         const user = await this.userModel
           .findById(userId)
@@ -364,14 +302,12 @@ export class BalanceService {
           throw new NotFoundException(`User with ID ${userId} not found`);
         }
 
-        // Validate sufficient locked balance
         if (user.lockedBalance < amount) {
           throw new BadRequestException(
             `Insufficient locked balance for payout: requested ${amount}, locked ${user.lockedBalance}`,
           );
         }
 
-        // Decrease locked balance only (payment)
         const updatedUser = await this.userModel
           .findByIdAndUpdate(
             userId,
@@ -395,8 +331,6 @@ export class BalanceService {
           );
         }
 
-        // Create ledger entry
-        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
         await this.ledgerEntryModel.create(
           [
             {
@@ -418,8 +352,6 @@ export class BalanceService {
         );
       };
 
-      // If session was provided, we're already in a transaction - execute directly
-      // Otherwise, start a new transaction
       if (session) {
         await executeTransaction();
       } else {
@@ -451,18 +383,9 @@ export class BalanceService {
     }
   }
 
-  /**
-   * Refund funds (non-winning bids after auction end)
-   * Increases balance, decreases lockedBalance
-   * Creates REFUND ledger entry
-   *
-   * @param userId User ID
-   * @param amount Amount to refund
-   * @param referenceId Reference ID (usually auctionId)
-   * @param description Optional description
-   * @param session Optional MongoDB session
-   * @returns Updated user document
-   */
+  // возврат средств (невыигравшие ставки после завершения аукциона)
+  // увеличивает balance, уменьшает lockedBalance
+  // создает запись REFUND в ledger
   async refund(
     userId: string,
     amount: number,
@@ -479,7 +402,6 @@ export class BalanceService {
     try {
       let result: UserDocument;
 
-      // Execute transaction logic
       const executeTransaction = async () => {
         const user = await this.userModel
           .findById(userId)
@@ -490,14 +412,12 @@ export class BalanceService {
           throw new NotFoundException(`User with ID ${userId} not found`);
         }
 
-        // Validate sufficient locked balance
         if (user.lockedBalance < amount) {
           throw new BadRequestException(
             `Insufficient locked balance for refund: requested ${amount}, locked ${user.lockedBalance}`,
           );
         }
 
-        // Refund: increase balance, decrease locked balance
         const updatedUser = await this.userModel
           .findByIdAndUpdate(
             userId,
@@ -515,15 +435,12 @@ export class BalanceService {
           throw new InternalServerErrorException('Failed to update user balance');
         }
 
-        // Validate invariants
         if (updatedUser.balance < 0 || updatedUser.lockedBalance < 0) {
           throw new InternalServerErrorException(
             'Balance invariants violated after refund operation',
           );
         }
 
-        // Create ledger entry
-        // OPTIMIZED: Removed duplicate check - transaction guarantees atomicity
         await this.ledgerEntryModel.create(
           [
             {
@@ -545,8 +462,6 @@ export class BalanceService {
         );
       };
 
-      // If session was provided, we're already in a transaction - execute directly
-      // Otherwise, start a new transaction
       if (session) {
         await executeTransaction();
       } else {
@@ -578,19 +493,9 @@ export class BalanceService {
     }
   }
 
-  /**
-   * Deposit funds to user balance
-   * Increases balance (for initial balance or external deposits)
-   * Creates DEPOSIT ledger entry
-   *
-   * @param userId User ID
-   * @param amount Amount to deposit
-   * @param description Optional description for ledger
-   * @param session Optional MongoDB session (for nested transactions)
-   * @returns Updated user document
-   * @throws NotFoundException if user not found
-   * @throws BadRequestException if amount is invalid
-   */
+  // пополнение баланса
+  // увеличивает balance
+  // создает запись DEPOSIT в ledger
   async deposit(
     userId: string,
     amount: number,
@@ -616,7 +521,6 @@ export class BalanceService {
           throw new NotFoundException(`User with ID ${userId} not found`);
         }
 
-        // Update balance atomically
         const updatedUser = await this.userModel
           .findByIdAndUpdate(
             userId,
@@ -633,14 +537,12 @@ export class BalanceService {
           throw new InternalServerErrorException('Failed to update user balance');
         }
 
-        // Validate invariants
         if (updatedUser.balance < 0) {
           throw new InternalServerErrorException(
             'Balance invariants violated after deposit operation',
           );
         }
 
-        // Create ledger entry
         await this.ledgerEntryModel.create(
           [
             {
@@ -690,13 +592,7 @@ export class BalanceService {
     }
   }
 
-  /**
-   * Validate balance invariants for a user
-   * Used for integrity checks
-   *
-   * @param userId User ID
-   * @returns true if invariants are satisfied
-   */
+  // проверка инвариантов баланса
   async validateBalanceInvariants(userId: string): Promise<boolean> {
     const user = await this.userModel.findById(userId).exec();
     if (!user) {

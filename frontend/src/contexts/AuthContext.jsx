@@ -1,11 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { apiRequest } from '../api/client';
 
-/**
- * AuthContext
- * 
- * Provides authentication state and methods throughout the app
- */
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
@@ -21,7 +16,6 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Load token from localStorage on mount
   useEffect(() => {
     const savedToken = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('auth_user');
@@ -40,9 +34,6 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  /**
-   * Login user
-   */
   const login = async (username, password) => {
     try {
       const response = await apiRequest('/auth/login', {
@@ -56,7 +47,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'Invalid response from server' };
       }
       
-      // Save to localStorage
       localStorage.setItem('auth_token', access_token);
       localStorage.setItem('auth_user', JSON.stringify(userData));
       
@@ -69,9 +59,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Register new user
-   */
   const register = async (username, password, email, initialBalance) => {
     try {
       const response = await apiRequest('/auth/register', {
@@ -85,7 +72,6 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'Invalid response from server' };
       }
       
-      // Save to localStorage
       localStorage.setItem('auth_token', access_token);
       localStorage.setItem('auth_user', JSON.stringify(userData));
       
@@ -98,9 +84,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  /**
-   * Logout user
-   */
   const logout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
@@ -108,9 +91,6 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  /**
-   * Get current user info from server
-   */
   const refreshUser = async () => {
     if (!token) return;
 
@@ -120,7 +100,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('auth_user', JSON.stringify(userData));
     } catch (error) {
       console.error('Error refreshing user:', error);
-      // If 401, token is invalid - logout
       if (error.message.includes('401') || error.message.includes('Unauthorized')) {
         logout();
       }
